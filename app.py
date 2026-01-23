@@ -20,12 +20,12 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 data_store = {}
 user_states = {}
 
-FORMS = {
-    "tablets": "таблеток",
-    "sachets": "саше",
-    "capsules": "капсул",
-    "spoons": "мг",
-    "liquid": "мг",
+FORMS_TEXT = {
+    "tablets": ("таблетку", "таблеток"),
+    "sachets": ("саше", "саше"),
+    "capsules": ("капсулу", "капсул"),
+    "spoons": ("мг", "мг"),
+    "liquid": ("мг", "мг"),
 }
 
 # ---------- MENU ----------
@@ -33,9 +33,9 @@ FORMS = {
 def main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Добавить лекарство", callback_data="add")],
-        [InlineKeyboardButton("🔄 Докуплено / Пополнить", callback_data="refill")],
         [InlineKeyboardButton("📋 Сводка", callback_data="summary")],
         [InlineKeyboardButton("⏳ Прогноз", callback_data="forecast")],
+        [InlineKeyboardButton("🗑 Удалить лекарство", callback_data="delete")],
     ])
 
 # ---------- START ----------
@@ -76,15 +76,16 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("Таблетки", callback_data="form_tablets")],
                 [InlineKeyboardButton("Саше", callback_data="form_sachets")],
                 [InlineKeyboardButton("Капсулы", callback_data="form_capsules")],
-                [InlineKeyboardButton("Мерные ложки", callback_data="form_spoons")],
-                [InlineKeyboardButton("Суспензии", callback_data="form_liquid")],
+                [InlineKeyboardButton("Жидкая форма", callback_data="form_liquid")],
             ])
         )
 
     elif state["step"] == "unit_mg":
         data["unit_mg"] = float(text.replace(",", "."))
         state["step"] = "bought"
-        await update.message.reply_text("Сколько единиц вы купили?")
+
+        singular, plural = FORMS_TEXT[data["form"]]
+        await update.message.reply_text(f"Сколько {plural} вы купили?")
 
     elif state["step"] == "bought":
         data["bought_units"] = float(text.replace(",", "."))
@@ -93,24 +94,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif state["step"] == "daily_mg":
         data["daily_mg"] = float(text.replace(",", "."))
-        state["step"] = "course"
-
-        await update.message.reply_text(
-            "📅 Выберите длительность курса:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Месяцы", callback_data="course_months")],
-                [InlineKeyboardButton("Дни", callback_data="course_days")],
-                [InlineKeyboardButton("Пожизненно", callback_data="course_life")],
-            ])
-        )
-
-    elif state["step"] == "course_value":
-        value = int(text)
-        if data["course_type"] == "months":
-            data["course_days"] = value * 30
-        else:
-            data["course_days"] = value
-
         await save_medicine(update, chat_id)
 
 # ---------- BUTTON HANDLER ----------
@@ -128,24 +111,26 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         form = data.replace("form_", "")
         user_states[chat_id]["data"]["form"] = form
         user_states[chat_id]["step"] = "unit_mg"
-        await query.message.reply_text("Сколько мг в одной единице?")
 
-    elif data.startswith("course_"):
-        state = user_states[chat_id]
-
-        if data == "course_life":
-            state["data"]["course_days"] = None
-            await save_medicine(update, chat_id)
-        else:
-            state["data"]["course_type"] = data.replace("course_", "")
-            state["step"] = "course_value"
-            await query.message.reply_text("Введите количество:")
+        singular, _ = FORMS_TEXT[form]
+        await query.message.reply_text(f"Сколько мг в одной {singular}?")
 
     elif data == "summary":
         await summary(update, context)
 
     elif data == "forecast":
         await forecast(update, context)
+
+    elif data == "delete":
+        await delete_menu(update, context)
+
+    elif data.startswith("delete_"):
+        med_name = data.replace("delete_", "")
+        data_store.get(chat_id, {}).pop(med_name, None)
+        await query.message.reply_text(
+            f"🗑 {med_name} удалено.",
+            reply_markup=main_menu()
+        )
 
 # ---------- SAVE ----------
 
@@ -167,6 +152,27 @@ async def save_medicine(update, chat_id):
 
     user_states.pop(chat_id)
     await update.effective_message.reply_text(msg, reply_markup=main_menu())
+
+# ---------- DELETE ----------
+
+async def delete_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    chat_id = query.message.chat.id
+    meds = data_store.get(chat_id, {})
+
+    if not meds:
+        await query.message.reply_text("Удалять нечего.", reply_markup=main_menu())
+        return
+
+    keyboard = [
+        [InlineKeyboardButton(name, callback_data=f"delete_{name}")]
+        for name in meds.keys()
+    ]
+
+    await query.message.reply_text(
+        "Выберите лекарство для удаления:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 # ---------- SUMMARY ----------
 
@@ -212,6 +218,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
