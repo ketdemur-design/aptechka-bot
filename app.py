@@ -1,9 +1,6 @@
 import os
 import math
-import asyncio
 from datetime import datetime, timedelta
-
-from flask import Flask, request
 
 from telegram import (
     Update,
@@ -21,12 +18,8 @@ from telegram.ext import (
 
 # ================== НАСТРОЙКИ ==================
 
-TOKEN = os.getenv("BOT_TOKEN")  # токен будем задавать в Railway
+TOKEN = os.getenv("BOT_TOKEN")
 
-app = Flask(__name__)
-telegram_app = Application.builder().token(TOKEN).build()
-
-# временное хранилище (потом заменим на БД)
 data_store = {}
 user_states = {}
 
@@ -55,7 +48,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# ================== ДОБАВЛЕНИЕ ЛЕКАРСТВА ==================
+# ================== ДОБАВЛЕНИЕ ==================
 
 async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -93,35 +86,17 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data["unit_mg"] = float(text.replace(",", "."))
         state["step"] = "bought"
 
-        form_word = FORMS[data["form"]]
-        await update.message.reply_text(f"Сколько {form_word} вы купили?")
+        await update.message.reply_text(
+            f"Сколько {FORMS[data['form']]} вы купили?"
+        )
 
     elif state["step"] == "bought":
         data["bought_units"] = float(text.replace(",", "."))
         state["step"] = "daily_mg"
-
         await update.message.reply_text("Сколько мг в сутки вам назначено?")
 
     elif state["step"] == "daily_mg":
         data["daily_mg"] = float(text.replace(",", "."))
-        state["step"] = "course"
-
-        await update.message.reply_text(
-            "📅 Выберите длительность курса:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Дни", callback_data="course_days")],
-                [InlineKeyboardButton("Месяцы", callback_data="course_months")],
-                [InlineKeyboardButton("Пожизненно", callback_data="course_life")],
-            ])
-        )
-
-    elif state["step"] == "course_value":
-        value = float(text.replace(",", "."))
-        if data["course_type"] == "months":
-            data["course_days"] = value * 30
-        else:
-            data["course_days"] = value
-
         await save_medicine(update, chat_id)
 
 # ================== КНОПКИ ==================
@@ -147,17 +122,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else "Сколько мг в одной единице?"
         )
 
-    elif data.startswith("course_"):
-        state = user_states[chat_id]
-
-        if data == "course_life":
-            state["data"]["course_days"] = None
-            await save_medicine(update, chat_id)
-        else:
-            state["data"]["course_type"] = data.replace("course_", "")
-            state["step"] = "course_value"
-            await query.message.reply_text("Введите количество (можно 1.5):")
-
     elif data == "summary":
         await summary(update, context)
 
@@ -174,16 +138,18 @@ async def save_medicine(update, chat_id):
 
     data_store.setdefault(chat_id, {})
     data_store[chat_id][data["name"]] = {
-        "name": data["name"],
         "daily_mg": data["daily_mg"],
         "total_mg": total_mg,
         "created": datetime.now(),
     }
 
-    msg = f"✅ {data['name']} добавлен.\nХватит на {math.floor(days_available)} дней."
-
     user_states.pop(chat_id)
-    await update.effective_message.reply_text(msg, reply_markup=main_menu())
+
+    await update.message.reply_text(
+        f"✅ {data['name']} добавлен.\n"
+        f"Хватит на {math.floor(days_available)} дней.",
+        reply_markup=main_menu()
+    )
 
 # ================== СВОДКА ==================
 
@@ -192,15 +158,15 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     meds = data_store.get(chat_id, {})
 
     if not meds:
-        await update.effective_message.reply_text("Список пуст.", reply_markup=main_menu())
+        await update.message.reply_text("Список пуст.", reply_markup=main_menu())
         return
 
     msg = "📋 Сводка:\n\n"
-    for med in meds.values():
+    for name, med in meds.items():
         days = int(med["total_mg"] / med["daily_mg"])
-        msg += f"{med['name']} — осталось {days} дней\n"
+        msg += f"{name} — осталось {days} дней\n"
 
-    await update.effective_message.reply_text(msg, reply_markup=main_menu())
+    await update.message.reply_text(msg, reply_markup=main_menu())
 
 # ================== ПРОГНОЗ ==================
 
@@ -209,23 +175,24 @@ async def forecast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     meds = data_store.get(chat_id, {})
 
     msg = "⏳ Прогноз:\n\n"
-    for med in meds.values():
+    for name, med in meds.items():
         days = int(med["total_mg"] / med["daily_mg"])
-        end_date = med["created"] + timedelta(days=days)
-        msg += f"{med['name']} — закончится {end_date.strftime('%d.%m.%Y')}\n"
+        end = med["created"] + timedelta(days=days)
+        msg += f"{name} — закончится {end:%d.%m.%Y}\n"
 
-    await update.effective_message.reply_text(msg, reply_markup=main_menu())
+    await update.message.reply_text(msg, reply_markup=main_menu())
 
-# ================== WEBHOOK ==================
+# ================== ЗАПУСК ==================
 
-@app.route("/", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    asyncio.run(telegram_app.process_update(update))
-    return "OK"
+def main():
+    application = Application.builder().token(TOKEN).build()
 
-# ================== РЕГИСТРАЦИЯ ==================
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(buttons))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CallbackQueryHandler(buttons))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
+
