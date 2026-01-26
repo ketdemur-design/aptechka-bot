@@ -1,37 +1,26 @@
 import os
-import math
 from datetime import datetime, timedelta
+import math
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    ContextTypes,
-    filters
+    Application, CommandHandler, MessageHandler,
+    CallbackQueryHandler, ContextTypes, filters
 )
-
-# ================== НАСТРОЙКИ ==================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Хранилище (позже заменим на БД)
 data_store = {}
 user_states = {}
 
 FORMS = {
-    "tablets": ("таблеток", "таблетке"),
-    "capsules": ("капсул", "капсуле"),
-    "sachets": ("саше", "саше"),
-    "liquid": ("мл", "мл")
+    "tablets": "таблеток",
+    "capsules": "капсул",
+    "sachets": "саше",
+    "liquid": "мл",
 }
 
-# ================== МЕНЮ ==================
+# ---------- MENU ----------
 
 def main_menu():
     return InlineKeyboardMarkup([
@@ -39,19 +28,18 @@ def main_menu():
         [InlineKeyboardButton("🔄 Докуплено / Пополнить", callback_data="refill")],
         [InlineKeyboardButton("📋 Сводка", callback_data="summary")],
         [InlineKeyboardButton("⏳ Прогноз", callback_data="forecast")],
-        [InlineKeyboardButton("🗑 Удалить лекарство", callback_data="delete")]
+        [InlineKeyboardButton("🗑 Удалить лекарство", callback_data="delete")],
     ])
 
-# ================== START ==================
+# ---------- START ----------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет! Я помогу следить за лекарствами 💊\n\n"
-        "Выберите действие 👇",
+        "Привет! Я бот для учёта лекарств 💊",
         reply_markup=main_menu()
     )
 
-# ================== ДОБАВЛЕНИЕ ==================
+# ---------- ADD ----------
 
 async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -64,145 +52,167 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not state:
         return
 
-    text = update.message.text.strip()
+    text = update.message.text.replace(",", ".").strip()
     data = state["data"]
 
     if state["step"] == "name":
         data["name"] = text
         state["step"] = "form"
         await update.message.reply_text(
-            "Выберите форму лекарства:",
+            "Выберите форму:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("Таблетки", callback_data="form_tablets")],
                 [InlineKeyboardButton("Капсулы", callback_data="form_capsules")],
                 [InlineKeyboardButton("Саше", callback_data="form_sachets")],
-                [InlineKeyboardButton("Жидкая форма", callback_data="form_liquid")]
+                [InlineKeyboardButton("Жидкая форма", callback_data="form_liquid")],
             ])
         )
 
     elif state["step"] == "unit_mg":
-        data["unit_mg"] = float(text.replace(",", "."))
+        data["unit_mg"] = float(text)
         state["step"] = "bought"
-        plural, _ = FORMS[data["form"]]
-        await update.message.reply_text(f"Сколько {plural} купили?")
+        await update.message.reply_text(
+            f"Сколько {FORMS[data['form']]} купили?"
+        )
 
     elif state["step"] == "bought":
-        data["bought_units"] = float(text.replace(",", "."))
+        units = float(text)
+        data["total_mg"] = units * data["unit_mg"]
         state["step"] = "daily_mg"
         await update.message.reply_text("Сколько мг в сутки вам назначено?")
 
     elif state["step"] == "daily_mg":
-        data["daily_mg"] = float(text.replace(",", "."))
+        data["daily_mg"] = float(text)
         state["step"] = "course"
         await update.message.reply_text(
-            "На какой срок назначено?",
+            "Срок приёма:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("Дни", callback_data="course_days")],
                 [InlineKeyboardButton("Месяцы", callback_data="course_months")],
-                [InlineKeyboardButton("Пожизненно", callback_data="course_life")]
+                [InlineKeyboardButton("Пожизненно", callback_data="course_life")],
             ])
         )
 
     elif state["step"] == "course_value":
-        value = float(text.replace(",", "."))
+        value = float(text)
         if data["course_type"] == "months":
             data["course_days"] = value * 30
         else:
             data["course_days"] = value
         await save_medicine(update, chat_id)
 
-# ================== КНОПКИ ==================
+# ---------- BUTTONS ----------
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     chat_id = query.message.chat.id
+    action = query.data
 
-    if query.data == "add":
+    if action == "add":
         await add_start(update, context)
 
-    elif query.data.startswith("form_"):
-        form = query.data.replace("form_", "")
+    elif action.startswith("form_"):
+        form = action.replace("form_", "")
         user_states[chat_id]["data"]["form"] = form
         user_states[chat_id]["step"] = "unit_mg"
-        _, single = FORMS[form]
-        await query.message.reply_text(f"Сколько мг в одной {single}?")
+        await query.message.reply_text(
+            f"Сколько мг в одной {FORMS[form][:-1]}?"
+        )
 
-    elif query.data.startswith("course_"):
-        if query.data == "course_life":
-            user_states[chat_id]["data"]["course_days"] = None
+    elif action.startswith("course_"):
+        state = user_states[chat_id]
+        if action == "course_life":
+            state["data"]["course_days"] = None
             await save_medicine(update, chat_id)
         else:
-            user_states[chat_id]["data"]["course_type"] = query.data.replace("course_", "")
-            user_states[chat_id]["step"] = "course_value"
+            state["data"]["course_type"] = action.replace("course_", "")
+            state["step"] = "course_value"
             await query.message.reply_text("Введите количество:")
 
-    elif query.data == "summary":
-        await summary(update, context)
+    elif action == "refill":
+        await refill_menu(update)
 
-    elif query.data == "forecast":
-        await forecast(update, context)
+    elif action.startswith("refill_"):
+        med = action.replace("refill_", "")
+        user_states[chat_id] = {"step": "refill_unit_mg", "med": med}
+        await query.message.reply_text("Сколько мг в одной новой таблетке?")
 
-# ================== СОХРАНЕНИЕ ==================
+    elif action == "delete":
+        await delete_menu(update)
 
-async def save_medicine(update: Update, chat_id):
+    elif action.startswith("delete_"):
+        med = action.replace("delete_", "")
+        data_store[chat_id].pop(med)
+        await query.message.reply_text("✅ Лекарство удалено", reply_markup=main_menu())
+
+# ---------- SAVE ----------
+
+async def save_medicine(update, chat_id):
     data = user_states[chat_id]["data"]
-
-    total_mg = data["unit_mg"] * data["bought_units"]
-    days_available = total_mg / data["daily_mg"]
-
     data_store.setdefault(chat_id, {})
     data_store[chat_id][data["name"]] = {
         **data,
-        "total_mg": total_mg,
-        "created": datetime.now()
+        "created": datetime.now(),
     }
-
-    msg = f"✅ {data['name']} добавлен.\nХватит примерно на {math.floor(days_available)} дней."
-
     user_states.pop(chat_id)
-    await update.effective_message.reply_text(msg, reply_markup=main_menu())
+    await update.effective_message.reply_text(
+        "✅ Лекарство добавлено",
+        reply_markup=main_menu()
+    )
 
-# ================== СВОДКА ==================
+# ---------- REFILL ----------
+
+async def refill_menu(update):
+    chat_id = update.effective_chat.id
+    meds = data_store.get(chat_id, {})
+    keyboard = [[InlineKeyboardButton(m, callback_data=f"refill_{m}")] for m in meds]
+    await update.callback_query.message.reply_text(
+        "Что пополнить?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# ---------- DELETE MENU ----------
+
+async def delete_menu(update):
+    chat_id = update.effective_chat.id
+    meds = data_store.get(chat_id, {})
+    keyboard = [[InlineKeyboardButton(m, callback_data=f"delete_{m}")] for m in meds]
+    await update.callback_query.message.reply_text(
+        "Что удалить?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# ---------- SUMMARY ----------
 
 async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     meds = data_store.get(chat_id, {})
-    if not meds:
-        await update.effective_message.reply_text("Список пуст.", reply_markup=main_menu())
-        return
-
     msg = "📋 Сводка:\n\n"
-    for m in meds.values():
-        days = int(m["total_mg"] / m["daily_mg"])
-        msg += f"{m['name']} — осталось {days} дней\n"
-
+    for med in meds.values():
+        days = int(med["total_mg"] / med["daily_mg"])
+        msg += f"{med['name']} — {days} дней\n"
     await update.effective_message.reply_text(msg, reply_markup=main_menu())
 
-# ================== ПРОГНОЗ ==================
+# ---------- FORECAST ----------
 
 async def forecast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     meds = data_store.get(chat_id, {})
     msg = "⏳ Прогноз:\n\n"
-
-    for m in meds.values():
-        days = int(m["total_mg"] / m["daily_mg"])
-        end = m["created"] + timedelta(days=days)
-        msg += f"{m['name']} — закончится {end.strftime('%d.%m.%Y')}\n"
-
+    for med in meds.values():
+        days = int(med["total_mg"] / med["daily_mg"])
+        date = med["created"] + timedelta(days=days)
+        msg += f"{med['name']} — {date.strftime('%d.%m.%Y')}\n"
     await update.effective_message.reply_text(msg, reply_markup=main_menu())
 
-# ================== ЗАПУСК ==================
+# ---------- RUN ----------
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-
+    app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-
-    print("🤖 Бот запущен (polling)")
     app.run_polling()
 
 if __name__ == "__main__":
