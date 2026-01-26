@@ -19,9 +19,8 @@ from telegram.ext import (
 # ================== TOKEN ==================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-
 if not BOT_TOKEN:
-    raise RuntimeError("❌ BOT_TOKEN не найден. Добавь его в Railway → Variables")
+    raise RuntimeError("BOT_TOKEN не найден в переменных окружения")
 
 # ================== ХРАНИЛИЩА ==================
 
@@ -57,7 +56,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# ================== ADD FLOW ==================
+# ================== ADD ==================
 
 async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -153,7 +152,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         user_states.pop(chat_id)
 
-# ================== BUTTON HANDLER ==================
+# ================== BUTTONS ==================
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -183,6 +182,12 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["step"] = "course_value"
             await query.message.reply_text("Введите количество:")
 
+    elif data == "summary":
+        await show_summary(query)
+
+    elif data == "forecast":
+        await show_forecast(query)
+
     elif data in ("refill", "dose", "delete"):
         meds = list(data_store.get(chat_id, {}).keys())
         if not meds:
@@ -195,14 +200,13 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif "_" in data:
         action, name = data.split("_", 1)
-        med = data_store[chat_id][name]
 
         if action == "delete":
             del data_store[chat_id][name]
             await query.message.reply_text(f"🗑 {name} удалено", reply_markup=main_menu())
 
         elif action == "refill":
-            user_states[chat_id]["data"] = med | {"name": name}
+            user_states[chat_id]["data"] = data_store[chat_id][name] | {"name": name}
             user_states[chat_id]["step"] = "unit_mg"
             await query.message.reply_text("Сколько мг в одной таблетке?")
 
@@ -236,11 +240,11 @@ async def save_medicine(update, chat_id):
 
 # ================== SUMMARY ==================
 
-async def summary(update: Update):
-    chat_id = update.effective_chat.id
+async def show_summary(query):
+    chat_id = query.message.chat.id
     meds = data_store.get(chat_id, {})
     if not meds:
-        await update.effective_message.reply_text("Список пуст.", reply_markup=main_menu())
+        await query.message.reply_text("Список пуст.", reply_markup=main_menu())
         return
 
     msg = "📋 Сводка:\n\n"
@@ -248,12 +252,12 @@ async def summary(update: Update):
         days = math.floor(med["total_mg"] / med["daily_mg"])
         msg += f"{name} — {days} дней\n"
 
-    await update.effective_message.reply_text(msg, reply_markup=main_menu())
+    await query.message.reply_text(msg, reply_markup=main_menu())
 
 # ================== FORECAST ==================
 
-async def forecast(update: Update):
-    chat_id = update.effective_chat.id
+async def show_forecast(query):
+    chat_id = query.message.chat.id
     meds = data_store.get(chat_id, {})
     msg = "⏳ Прогноз:\n\n"
 
@@ -262,7 +266,7 @@ async def forecast(update: Update):
         end = med["created"] + timedelta(days=days)
         msg += f"{name} — закончится {end.strftime('%d.%m.%Y')}\n"
 
-    await update.effective_message.reply_text(msg, reply_markup=main_menu())
+    await query.message.reply_text(msg, reply_markup=main_menu())
 
 # ================== MAIN ==================
 
