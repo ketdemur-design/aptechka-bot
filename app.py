@@ -1,3 +1,4 @@
+import os
 import math
 from datetime import datetime, timedelta
 
@@ -15,7 +16,12 @@ from telegram.ext import (
     filters,
 )
 
-BOT_TOKEN = "PASTE_YOUR_TOKEN_HERE"
+# ================== TOKEN ==================
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    raise RuntimeError("❌ BOT_TOKEN не найден. Добавь его в Railway → Variables")
 
 # ================== ХРАНИЛИЩА ==================
 
@@ -84,7 +90,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.replace(",", ".").strip()
     data = state["data"]
 
-    # ---------- ADD ----------
     if state["flow"] == "add":
         if state["step"] == "name":
             data["name"] = text
@@ -109,13 +114,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif state["step"] == "course_value":
             value = float(text)
-            if data["course_type"] == "months":
-                data["course_days"] = value * 30
-            else:
-                data["course_days"] = value
+            data["course_days"] = value * 30 if data["course_type"] == "months" else value
             await save_medicine(update, chat_id)
 
-    # ---------- REFILL ----------
     elif state["flow"] == "refill":
         if state["step"] == "unit_mg":
             data["unit_mg"] = float(text)
@@ -126,10 +127,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif state["step"] == "units":
             units = float(text)
             added_mg = units * data["unit_mg"]
-
             med = data_store[chat_id][data["name"]]
             med["total_mg"] += added_mg
-
             days = math.floor(med["total_mg"] / med["daily_mg"])
 
             await update.message.reply_text(
@@ -141,7 +140,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             user_states.pop(chat_id)
 
-    # ---------- CHANGE DOSE ----------
     elif state["flow"] == "dose":
         med = data_store[chat_id][data["name"]]
         med["daily_mg"] = float(text)
@@ -171,11 +169,9 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state = user_states[chat_id]
         state["data"]["form"] = form
         state["step"] = "unit_mg"
-
-        if form == "liquid":
-            await query.message.reply_text("Сколько мг в 1 мл?")
-        else:
-            await query.message.reply_text("Сколько мг в одной таблетке?")
+        await query.message.reply_text(
+            "Сколько мг в 1 мл?" if form == "liquid" else "Сколько мг в одной таблетке?"
+        )
 
     elif data.startswith("course_"):
         state = user_states[chat_id]
@@ -187,12 +183,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["step"] = "course_value"
             await query.message.reply_text("Введите количество:")
 
-    elif data == "summary":
-        await summary(update)
-
-    elif data == "forecast":
-        await forecast(update)
-
     elif data in ("refill", "dose", "delete"):
         meds = list(data_store.get(chat_id, {}).keys())
         if not meds:
@@ -200,11 +190,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user_states[chat_id] = {"flow": data, "step": "select", "data": {}}
-
-        keyboard = [
-            [InlineKeyboardButton(name, callback_data=f"{data}_{name}")]
-            for name in meds
-        ]
+        keyboard = [[InlineKeyboardButton(name, callback_data=f"{data}_{name}")] for name in meds]
         await query.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif "_" in data:
@@ -216,7 +202,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"🗑 {name} удалено", reply_markup=main_menu())
 
         elif action == "refill":
-            user_states[chat_id]["data"] = med
+            user_states[chat_id]["data"] = med | {"name": name}
             user_states[chat_id]["step"] = "unit_mg"
             await query.message.reply_text("Сколько мг в одной таблетке?")
 
