@@ -41,12 +41,27 @@ def main_menu():
         [InlineKeyboardButton("🗑 Удалить лекарство", callback_data="delete")],
     ])
 
+def form_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("💊 Таблетки", callback_data="form_tablets")],
+        [InlineKeyboardButton("💊 Капсулы", callback_data="form_capsules")],
+        [InlineKeyboardButton("📦 Саше", callback_data="form_sachet")],
+        [InlineKeyboardButton("🧴 Жидкая форма", callback_data="form_liquid")],
+    ])
+
 def course_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📆 Дни", callback_data="course_days")],
         [InlineKeyboardButton("🗓 Месяцы", callback_data="course_months")],
         [InlineKeyboardButton("♾ Пожизненно", callback_data="course_forever")],
     ])
+
+FORM_LABELS = {
+    "tablets": "таблеток",
+    "capsules": "капсул",
+    "sachet": "саше",
+    "liquid": "мл",
+}
 
 # ================== START ==================
 
@@ -83,76 +98,50 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = state["data"]
 
     if state["flow"] == "add":
+
         if state["step"] == "name":
             data["name"] = text
-            state["step"] = "unit_mg"
-            await update.message.reply_text("Сколько мг в одной таблетке?")
+            state["step"] = "form"
+            await update.message.reply_text(
+                "Выберите форму лекарства:",
+                reply_markup=form_menu()
+            )
 
         elif state["step"] == "unit_mg":
-            data["unit_mg"] = int(float(text))
+            data["unit_mg"] = float(text)
             state["step"] = "units"
-            await update.message.reply_text("Сколько таблеток купили?")
+            label = FORM_LABELS[data["form"]]
+            await update.message.reply_text(f"Сколько {label} купили?")
 
         elif state["step"] == "units":
-            data["units"] = int(float(text))
+            data["units"] = float(text)
             state["step"] = "daily_mg"
             await update.message.reply_text("Сколько мг в сутки принимаете?")
 
         elif state["step"] == "daily_mg":
-            data["daily_mg"] = int(float(text))
+            data["daily_mg"] = float(text)
             state["step"] = "course"
             await update.message.reply_text(
-                "Какой курс приёма?",
+                "Какой срок приёма?",
                 reply_markup=course_menu()
             )
 
         elif state["step"] == "course_value":
-            value = int(float(text))
-            course_type = data["course_type"]
-
-            if course_type == "days":
+            value = float(text)
+            if data["course_type"] == "days":
                 data["course_end"] = datetime.now() + timedelta(days=value)
-            elif course_type == "months":
+            else:
                 data["course_end"] = datetime.now() + timedelta(days=value * 30)
 
             await save_medicine(update, chat_id)
             user_states.pop(chat_id)
 
-    elif state["flow"] == "refill":
-        if state["step"] == "unit_mg":
-            data["unit_mg"] = int(float(text))
-            state["step"] = "units"
-            await update.message.reply_text("Сколько таблеток купили?")
-
-        elif state["step"] == "units":
-            units = int(float(text))
-            med = data_store[chat_id][data["name"]]
-
-            added_mg = units * data["unit_mg"]
-            med["total_mg"] += added_mg
-            med["purchases"][data["unit_mg"]] = (
-                med["purchases"].get(data["unit_mg"], 0) + units
-            )
-            med["notified"] = False
-
-            days = med["total_mg"] // med["daily_mg"]
-
-            await update.message.reply_text(
-                f"🔄 Пополнение учтено\n"
-                f"Добавлено: {added_mg} мг\n"
-                f"При приёме {med['daily_mg']} мг хватит на {days} дней",
-                reply_markup=main_menu()
-            )
-            user_states.pop(chat_id)
-
     elif state["flow"] == "dose":
         med = data_store[chat_id][data["name"]]
-        med["daily_mg"] = int(float(text))
+        med["daily_mg"] = float(text)
         med["notified"] = False
-
-        days = med["total_mg"] // med["daily_mg"]
         await update.message.reply_text(
-            f"🔧 Дозировка обновлена\nХватит на {days} дней",
+            "🔧 Дозировка обновлена",
             reply_markup=main_menu()
         )
         user_states.pop(chat_id)
@@ -166,60 +155,32 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if data == "start_bot":
-        await query.message.reply_text(
-            "Отлично! Что будем делать?",
-            reply_markup=main_menu()
-        )
+        await query.message.reply_text("Что будем делать?", reply_markup=main_menu())
 
     elif data == "add":
         await add_start(update, context)
 
+    elif data.startswith("form_"):
+        form = data.split("_")[1]
+        state = user_states[chat_id]
+        state["data"]["form"] = form
+        state["step"] = "unit_mg"
+        await query.message.reply_text("Сколько мг в одной единице?")
+
     elif data.startswith("course_"):
-        state = user_states.get(chat_id)
-        if not state:
-            return
-
-        course_type = data.split("_")[1]
-        info = state["data"]
-
-        if course_type == "forever":
-            info["course_end"] = None
+        course = data.split("_")[1]
+        state = user_states[chat_id]
+        if course == "forever":
+            state["data"]["course_end"] = None
             await save_medicine(query, chat_id)
             user_states.pop(chat_id)
-            return
-
-        info["course_type"] = course_type
-        state["step"] = "course_value"
-        await query.message.reply_text(
-            "Введите количество дней:" if course_type == "days"
-            else "Введите количество месяцев:"
-        )
-
-    elif data in ("refill", "dose", "delete"):
-        meds = list(data_store.get(chat_id, {}).keys())
-        if not meds:
-            await query.message.reply_text("Список пуст.", reply_markup=main_menu())
-            return
-
-        user_states[chat_id] = {"flow": data, "step": "select", "data": {}}
-        kb = [[InlineKeyboardButton(m, callback_data=f"{data}_{m}")] for m in meds]
-        await query.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif "_" in data:
-        action, name = data.split("_", 1)
-
-        if action == "delete":
-            del data_store[chat_id][name]
-            await query.message.reply_text(f"🗑 {name} удалено", reply_markup=main_menu())
-
-        elif action == "refill":
-            user_states[chat_id]["data"] = {"name": name}
-            user_states[chat_id]["step"] = "unit_mg"
-            await query.message.reply_text("Сколько мг в таблетке?")
-
-        elif action == "dose":
-            user_states[chat_id]["data"] = {"name": name}
-            await query.message.reply_text("Введите новую суточную дозировку (мг):")
+        else:
+            state["data"]["course_type"] = course
+            state["step"] = "course_value"
+            await query.message.reply_text(
+                "Введите количество дней:" if course == "days"
+                else "Введите количество месяцев (можно 1.5):"
+            )
 
     elif data == "summary":
         await show_summary(query)
@@ -230,23 +191,22 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== SAVE ==================
 
 async def save_medicine(update, chat_id):
-    data = user_states[chat_id]["data"]
-    total_mg = data["unit_mg"] * data["units"]
+    d = user_states[chat_id]["data"]
+    total_mg = d["unit_mg"] * d["units"]
 
     data_store.setdefault(chat_id, {})
-    data_store[chat_id][data["name"]] = {
-        "daily_mg": data["daily_mg"],
+    data_store[chat_id][d["name"]] = {
+        "form": d["form"],
+        "daily_mg": d["daily_mg"],
         "total_mg": total_mg,
         "created": datetime.now(),
-        "purchases": {data["unit_mg"]: data["units"]},
-        "course_end": data.get("course_end"),
+        "purchases": {d["unit_mg"]: d["units"]},
+        "course_end": d.get("course_end"),
         "notified": False,
     }
 
-    days = total_mg // data["daily_mg"]
-
     await update.message.reply_text(
-        f"✅ {data['name']} добавлен\nХватит на {days} дней",
+        f"✅ {d['name']} добавлен",
         reply_markup=main_menu()
     )
 
@@ -257,8 +217,8 @@ async def show_summary(query):
     meds = data_store.get(chat_id, {})
     msg = "📋 Сводка:\n\n"
     for name, med in meds.items():
-        days = med["total_mg"] // med["daily_mg"]
-        msg += f"{name} — {days} дней\n"
+        days = med["total_mg"] / med["daily_mg"]
+        msg += f"{name} — {int(days)} дней\n"
     await query.message.reply_text(msg, reply_markup=main_menu())
 
 async def show_forecast(query):
@@ -266,7 +226,7 @@ async def show_forecast(query):
     meds = data_store.get(chat_id, {})
     msg = "⏳ Прогноз:\n\n"
     for name, med in meds.items():
-        days = med["total_mg"] // med["daily_mg"]
+        days = med["total_mg"] / med["daily_mg"]
         end = med["created"] + timedelta(days=days)
         msg += f"{name} — {end.strftime('%d.%m.%Y')}\n"
     await query.message.reply_text(msg, reply_markup=main_menu())
@@ -276,12 +236,11 @@ async def show_forecast(query):
 async def reminder_loop(app):
     while True:
         now = datetime.now()
-
         for chat_id, meds in data_store.items():
             for name, med in meds.items():
+
                 if med["notified"]:
                     continue
-
                 if med["course_end"] and now > med["course_end"]:
                     continue
 
@@ -296,7 +255,7 @@ async def reminder_loop(app):
                 text = f"🛒 Пора купить {name}\n\nНужно докупить {need_mg} мг:\n"
                 for unit_mg in med["purchases"]:
                     pills = math.ceil(need_mg / unit_mg)
-                    text += f"• {unit_mg} мг — {pills} таблеток\n"
+                    text += f"• {unit_mg} мг — {pills} единиц\n"
 
                 await app.bot.send_message(chat_id, text)
                 med["notified"] = True
