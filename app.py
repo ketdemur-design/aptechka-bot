@@ -23,6 +23,7 @@ if not BOT_TOKEN:
 
 data_store = {}      # chat_id -> medicines
 user_states = {}     # chat_id -> state
+started_users = set()  # кто уже нажал "Начать"
 
 # ================== МЕНЮ ==================
 
@@ -63,21 +64,22 @@ FORM_LABELS = {
     "liquid": "мл",
 }
 
-# ================== START ==================
+# ================== ПРИВЕТСТВИЕ ==================
+
+WELCOME_TEXT = (
+    "Привет 👋\n"
+    "Я помогу тебе учитывать лекарства и вовремя напоминать о покупке 💊\n\n"
+    "Что я умею:\n"
+    "• считаю остаток лекарств\n"
+    "• учитываю разные дозировки\n"
+    "• пересчитываю всё при смене дозы\n"
+    "• напоминаю за 7 дней до окончания\n"
+    "• не беспокою, если курс лечения завершён\n\n"
+    "Нажми кнопку ниже, чтобы начать 👇"
+)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (
-        "Привет 👋\n"
-        "Я помогу тебе учитывать лекарства и вовремя напоминать о покупке 💊\n\n"
-        "Что я умею:\n"
-        "• считать остаток таблеток\n"
-        "• учитывать разные дозировки\n"
-        "• пересчитывать остаток таблеток при смене дозировки\n"
-        "• напоминать за 7 дней до окончания\n"
-        "• не напоминать, если курс лечения закончился\n\n"
-        "Нажми кнопку ниже, чтобы начать 👇"
-    )
-    await update.message.reply_text(text, reply_markup=start_menu())
+    await update.message.reply_text(WELCOME_TEXT, reply_markup=start_menu())
 
 # ================== ADD ==================
 
@@ -90,6 +92,12 @@ async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+
+    # ⬇️ если человек просто написал что угодно, но не запускал бота
+    if chat_id not in started_users and chat_id not in user_states:
+        await update.message.reply_text(WELCOME_TEXT, reply_markup=start_menu())
+        return
+
     state = user_states.get(chat_id)
     if not state:
         return
@@ -136,16 +144,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_medicine(update, chat_id)
             user_states.pop(chat_id)
 
-    elif state["flow"] == "dose":
-        med = data_store[chat_id][data["name"]]
-        med["daily_mg"] = float(text)
-        med["notified"] = False
-        await update.message.reply_text(
-            "🔧 Дозировка обновлена",
-            reply_markup=main_menu()
-        )
-        user_states.pop(chat_id)
-
 # ================== BUTTONS ==================
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -155,6 +153,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if data == "start_bot":
+        started_users.add(chat_id)
         await query.message.reply_text("Что будем делать?", reply_markup=main_menu())
 
     elif data == "add":
