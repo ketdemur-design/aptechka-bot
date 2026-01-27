@@ -13,13 +13,9 @@ from telegram.ext import (
     filters,
 )
 
-# ================== TOKEN ==================
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN не найден")
-
-# ================== ХРАНИЛИЩА ==================
 
 data_store = {}
 user_states = {}
@@ -60,7 +56,12 @@ def course_menu():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет 👋\nЯ помогу следить за лекарствами 💊",
+        "Привет 👋\n\n"
+        "Я помогу:\n"
+        "• следить за лекарствами 💊\n"
+        "• считать остаток\n"
+        "• напоминать за 7 дней до окончания\n\n"
+        "Нажми «Начать», чтобы запустить бота 👇",
         reply_markup=start_menu()
     )
 
@@ -75,18 +76,15 @@ async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-
-    if chat_id not in started_users and chat_id not in user_states:
-        await update.message.reply_text("Нажмите «Начать» 👇", reply_markup=start_menu())
-        return
+    text = update.message.text.replace(",", ".").strip()
 
     state = user_states.get(chat_id)
     if not state:
         return
 
-    text = update.message.text.replace(",", ".").strip()
     data = state["data"]
 
+    # -------- ДОБАВЛЕНИЕ --------
     if state["flow"] == "add":
 
         if state["step"] == "name":
@@ -118,6 +116,19 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await save_medicine(update, chat_id)
             user_states.pop(chat_id)
+
+    # -------- ИЗМЕНЕНИЕ ДОЗИРОВКИ --------
+    elif state["flow"] == "dose":
+
+        med = state["medicine"]
+        data_store[chat_id][med]["daily_mg"] = float(text)
+        data_store[chat_id][med]["notified"] = False
+
+        await update.message.reply_text(
+            f"✅ Дозировка для «{med}» обновлена",
+            reply_markup=main_menu()
+        )
+        user_states.pop(chat_id)
 
 # ================== BUTTONS ==================
 
@@ -152,21 +163,30 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["step"] = "course_value"
             await query.message.reply_text("Введите количество:")
 
+    elif data == "dose":
+        meds = data_store.get(chat_id)
+        if not meds:
+            await query.message.reply_text("Лекарств пока нет")
+            return
+
+        med = list(meds.keys())[0]
+        user_states[chat_id] = {
+            "flow": "dose",
+            "medicine": med
+        }
+        await query.message.reply_text("Введите новую суточную дозировку (мг):")
+
     elif data == "summary":
         await show_summary(query)
 
     elif data == "forecast":
         await show_forecast(query)
 
-    elif data == "refill":
-        await query.message.reply_text("Пополнение будет добавлено позже 😉")
-
 # ================== SAVE ==================
 
 async def save_medicine(update, chat_id):
     d = user_states[chat_id]["data"]
     total_mg = d["unit_mg"] * d["units"]
-    days = total_mg / d["daily_mg"]
 
     data_store.setdefault(chat_id, {})
     data_store[chat_id][d["name"]] = {
@@ -177,32 +197,22 @@ async def save_medicine(update, chat_id):
         "notified": False,
     }
 
-    text = (
-        f"✅ {d['name']} добавлен\n"
-        f"Всего: {int(d['units'])} шт\n"
-        f"Хватит на: {int(days)} дней\n"
+    await update.message.reply_text(
+        f"✅ {d['name']} добавлен",
+        reply_markup=main_menu()
     )
-
-    text += (
-        f"Курс до: {d['course_end'].strftime('%d.%m.%Y')}"
-        if d.get("course_end") else
-        "Курс: пожизненно"
-    )
-
-    await update.message.reply_text(text, reply_markup=main_menu())
 
 # ================== SUMMARY ==================
 
 async def show_summary(query):
     meds = data_store.get(query.message.chat.id, {})
-    if not meds:
-        await query.message.reply_text("Лекарств пока нет")
-        return
-
     msg = "📋 Сводка:\n\n"
+
     for name, m in meds.items():
-        days = int(m["total_mg"] / m["daily_mg"])
-        msg += f"{name} — {days} дней\n"
+        days_total = m["total_mg"] / m["daily_mg"]
+        days_passed = (datetime.now() - m["created"]).days
+        days_left = max(0, int(days_total - days_passed))
+        msg += f"{name} — осталось {days_left} дней\n"
 
     await query.message.reply_text(msg, reply_markup=main_menu())
 
@@ -211,31 +221,35 @@ async def show_summary(query):
 async def show_forecast(query):
     meds = data_store.get(query.message.chat.id, {})
     msg = "⏳ Прогноз:\n\n"
+
     for name, m in meds.items():
-        days = m["total_mg"] / m["daily_mg"]
-        end = m["created"] + timedelta(days=days)
+        days_total = m["total_mg"] / m["daily_mg"]
+        end = m["created"] + timedelta(days=days_total)
         msg += f"{name} — до {end.strftime('%d.%m.%Y')}\n"
 
     await query.message.reply_text(msg, reply_markup=main_menu())
 
-# ================== REMINDERS ==================
+# ================== REMINDER ==================
 
 async def reminder_loop(app):
     while True:
+        now = datetime.now()
+
         for chat_id, meds in data_store.items():
             for name, m in meds.items():
 
                 if m["notified"]:
                     continue
 
-                days_left = m["total_mg"] / m["daily_mg"]
+                days_total = m["total_mg"] / m["daily_mg"]
+                days_passed = (now - m["created"]).days
+                days_left = days_total - days_passed
 
-                # 🔔 ТОЛЬКО за 7 дней до окончания таблеток
-                if days_left <= 7:
+                if 0 < days_left <= 7:
                     await app.bot.send_message(
                         chat_id,
                         f"🛒 Заканчивается {name}\n"
-                        f"Осталось примерно {int(days_left)} дней.\n"
+                        f"Осталось ~{int(days_left)} дней.\n"
                         f"Пора купить 💊"
                     )
                     m["notified"] = True
