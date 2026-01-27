@@ -1,6 +1,6 @@
 import os
 import math
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta
 
 from telegram import (
     Update,
@@ -35,8 +35,6 @@ FORMS = {
     "sachets": ("саше", "саше"),
     "liquid": ("мл", "мл"),
 }
-
-REMIND_DAYS = 7
 
 # ================== МЕНЮ ==================
 
@@ -99,8 +97,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif state["step"] == "unit_mg":
             data["unit_mg"] = float(text)
-            state["step"] = "bought_units"
             form_plural = FORMS[data["form"]][1]
+            state["step"] = "bought_units"
             await update.message.reply_text(f"Сколько {form_plural} купили?")
 
         elif state["step"] == "bought_units":
@@ -121,8 +119,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif state["flow"] == "refill":
         if state["step"] == "unit_mg":
             data["unit_mg"] = float(text)
-            state["step"] = "units"
             form_plural = FORMS[data["form"]][1]
+            state["step"] = "units"
             await update.message.reply_text(f"Сколько {form_plural} купили?")
 
         elif state["step"] == "units":
@@ -130,14 +128,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             added_mg = units * data["unit_mg"]
             med = data_store[chat_id][data["name"]]
             med["total_mg"] += added_mg
-            med["refills"].append(data["unit_mg"])
             days = math.floor(med["total_mg"] / med["daily_mg"])
 
             await update.message.reply_text(
                 f"🔄 Пополнение учтено\n"
                 f"Добавлено: {int(added_mg)} мг\n"
-                f"Всего теперь: {int(med['total_mg'])} мг\n"
-                f"Хватит на {days} дней",
+                f"Всего теперь: {int(med['total_mg'])} мг\n\n"
+                f"При приёме {med['daily_mg']} мг/день хватит на {days} дней",
                 reply_markup=main_menu()
             )
             user_states.pop(chat_id)
@@ -186,3 +183,99 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("Введите количество:")
 
     elif data == "summary":
+        await show_summary(query)
+
+    elif data == "forecast":
+        await show_forecast(query)
+
+    elif data in ("refill", "dose", "delete"):
+        meds = list(data_store.get(chat_id, {}).keys())
+        if not meds:
+            await query.message.reply_text("Список пуст.", reply_markup=main_menu())
+            return
+
+        user_states[chat_id] = {"flow": data, "step": "select", "data": {}}
+        keyboard = [[InlineKeyboardButton(name, callback_data=f"{data}_{name}")] for name in meds]
+        await query.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    elif "_" in data:
+        action, name = data.split("_", 1)
+
+        if action == "delete":
+            del data_store[chat_id][name]
+            await query.message.reply_text(f"🗑 {name} удалено", reply_markup=main_menu())
+
+        elif action == "refill":
+            user_states[chat_id]["data"] = data_store[chat_id][name] | {"name": name}
+            user_states[chat_id]["step"] = "unit_mg"
+            await query.message.reply_text("Сколько мг в одной таблетке?")
+
+        elif action == "dose":
+            user_states[chat_id]["data"] = {"name": name}
+            await query.message.reply_text("Введите новую суточную дозировку (мг):")
+
+# ================== SAVE ==================
+
+async def save_medicine(update, chat_id):
+    data = user_states[chat_id]["data"]
+    total_mg = data["unit_mg"] * data["bought_units"]
+    days = math.floor(total_mg / data["daily_mg"])
+
+    data_store.setdefault(chat_id, {})
+    data_store[chat_id][data["name"]] = {
+        "form": data["form"],
+        "unit_mg": data["unit_mg"],
+        "daily_mg": data["daily_mg"],
+        "total_mg": total_mg,
+        "created": datetime.now(),
+    }
+
+    await update.effective_message.reply_text(
+        f"✅ {data['name']} добавлен\n"
+        f"Всего: {int(total_mg)} мг\n"
+        f"При приёме {data['daily_mg']} мг/день хватит на {days} дней",
+        reply_markup=main_menu()
+    )
+    user_states.pop(chat_id)
+
+# ================== SUMMARY ==================
+
+async def show_summary(query):
+    chat_id = query.message.chat.id
+    meds = data_store.get(chat_id, {})
+    if not meds:
+        await query.message.reply_text("Список пуст.", reply_markup=main_menu())
+        return
+
+    msg = "📋 Сводка:\n\n"
+    for name, med in meds.items():
+        days = math.floor(med["total_mg"] / med["daily_mg"])
+        msg += f"{name} — {days} дней\n"
+
+    await query.message.reply_text(msg, reply_markup=main_menu())
+
+# ================== FORECAST ==================
+
+async def show_forecast(query):
+    chat_id = query.message.chat.id
+    meds = data_store.get(chat_id, {})
+    msg = "⏳ Прогноз:\n\n"
+
+    for name, med in meds.items():
+        days = math.floor(med["total_mg"] / med["daily_mg"])
+        end = med["created"] + timedelta(days=days)
+        msg += f"{name} — закончится {end.strftime('%d.%m.%Y')}\n"
+
+    await query.message.reply_text(msg, reply_markup=main_menu())
+
+# ================== MAIN ==================
+
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
