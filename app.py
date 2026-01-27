@@ -1,7 +1,6 @@
 import os
 import math
-import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 from telegram import (
     Update,
@@ -21,7 +20,7 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN не найден в переменных окружения")
+    raise RuntimeError("BOT_TOKEN не найден")
 
 # ================== ХРАНИЛИЩА ==================
 
@@ -53,7 +52,7 @@ def main_menu():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет 👋\nЯ помогу учитывать лекарства.\n\nВыберите действие:",
+        "Привет 👋 Я слежу за лекарствами и напомню, когда их пора купить.",
         reply_markup=main_menu()
     )
 
@@ -99,20 +98,20 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif state["step"] == "unit_mg":
             data["unit_mg"] = float(text)
             state["step"] = "bought_units"
-            await update.message.reply_text("Сколько штук купили?")
+            await update.message.reply_text("Сколько единиц купили?")
 
         elif state["step"] == "bought_units":
-            data["bought_units"] = int(text)
+            data["bought_units"] = float(text)
             state["step"] = "daily_mg"
             await update.message.reply_text("Сколько мг в сутки вы принимаете?")
 
         elif state["step"] == "daily_mg":
             data["daily_mg"] = float(text)
             state["step"] = "course"
-            await update.message.reply_text("На какой срок приём?", reply_markup=course_keyboard())
+            await update.message.reply_text("Срок приёма:", reply_markup=course_keyboard())
 
         elif state["step"] == "course_value":
-            value = int(text)
+            value = float(text)
             data["course_days"] = value * 30 if data["course_type"] == "months" else value
             await save_medicine(update, chat_id)
 
@@ -120,35 +119,23 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if state["step"] == "unit_mg":
             data["unit_mg"] = float(text)
             state["step"] = "units"
-            await update.message.reply_text("Сколько штук купили?")
+            await update.message.reply_text("Сколько единиц купили?")
 
         elif state["step"] == "units":
-            units = int(text)
+            units = float(text)
             med = data_store[chat_id][data["name"]]
-
             added_mg = units * data["unit_mg"]
+
             med["total_mg"] += added_mg
-            med["packs"][data["unit_mg"]] = med["packs"].get(data["unit_mg"], 0) + units
+            med["packages"].append(data["unit_mg"])
 
-            days = math.floor(med["total_mg"] / med["daily_mg"])
-
-            await update.message.reply_text(
-                f"🔄 Пополнение учтено\n"
-                f"Добавлено: {int(added_mg)} мг\n"
-                f"Хватит на {days} дней",
-                reply_markup=main_menu()
-            )
+            await update.message.reply_text("✅ Пополнение учтено", reply_markup=main_menu())
             user_states.pop(chat_id)
 
     elif state["flow"] == "dose":
         med = data_store[chat_id][data["name"]]
         med["daily_mg"] = float(text)
-
-        await update.message.reply_text(
-            f"🔧 Дозировка обновлена\n"
-            f"{med['daily_mg']} мг/день",
-            reply_markup=main_menu()
-        )
+        await update.message.reply_text("✅ Дозировка обновлена", reply_markup=main_menu())
         user_states.pop(chat_id)
 
 # ================== BUTTONS ==================
@@ -166,7 +153,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state = user_states[chat_id]
         state["data"]["form"] = data.replace("form_", "")
         state["step"] = "unit_mg"
-        await query.message.reply_text("Сколько мг в одной таблетке?")
+        await query.message.reply_text("Сколько мг в одной единице?")
 
     elif data.startswith("course_"):
         state = user_states[chat_id]
@@ -178,43 +165,32 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["step"] = "course_value"
             await query.message.reply_text("Введите количество:")
 
-    elif data == "summary":
-        await show_summary(query)
-
-    elif data == "forecast":
-        await show_forecast(query)
-
     elif data in ("refill", "dose", "delete"):
-        meds = list(data_store.get(chat_id, {}).keys())
-        if not meds:
-            await query.message.reply_text("Список пуст.", reply_markup=main_menu())
-            return
-
+        meds = list(data_store.get(chat_id, {}))
         user_states[chat_id] = {"flow": data, "step": "select", "data": {}}
-        keyboard = [[InlineKeyboardButton(name, callback_data=f"{data}_{name}")] for name in meds]
-        await query.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(keyboard))
+        kb = [[InlineKeyboardButton(m, callback_data=f"{data}_{m}")] for m in meds]
+        await query.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif "_" in data:
         action, name = data.split("_", 1)
 
-        if action == "delete":
-            del data_store[chat_id][name]
-            await query.message.reply_text(f"🗑 {name} удалено", reply_markup=main_menu())
-
-        elif action == "refill":
+        if action == "refill":
             user_states[chat_id]["data"] = {"name": name}
             user_states[chat_id]["step"] = "unit_mg"
-            await query.message.reply_text("Сколько мг в одной таблетке?")
+            await query.message.reply_text("Сколько мг в одной единице?")
 
         elif action == "dose":
             user_states[chat_id]["data"] = {"name": name}
-            await query.message.reply_text("Введите новую суточную дозировку (мг):")
+            await query.message.reply_text("Введите новую дозировку (мг/день):")
+
+        elif action == "delete":
+            del data_store[chat_id][name]
+            await query.message.reply_text("🗑 Удалено", reply_markup=main_menu())
 
 # ================== SAVE ==================
 
 async def save_medicine(update, chat_id):
     data = user_states[chat_id]["data"]
-
     total_mg = data["unit_mg"] * data["bought_units"]
 
     data_store.setdefault(chat_id, {})
@@ -222,70 +198,35 @@ async def save_medicine(update, chat_id):
         "form": data["form"],
         "daily_mg": data["daily_mg"],
         "total_mg": total_mg,
-        "packs": {data["unit_mg"]: data["bought_units"]},
-        "course_days": data["course_days"],
+        "packages": [data["unit_mg"]],
         "created": datetime.now(),
+        "course_days": data.get("course_days"),
         "notified": False,
     }
 
-    await update.effective_message.reply_text(
-        f"✅ {data['name']} добавлен",
-        reply_markup=main_menu()
-    )
+    await update.effective_message.reply_text("✅ Лекарство добавлено", reply_markup=main_menu())
     user_states.pop(chat_id)
 
-# ================== SUMMARY / FORECAST ==================
+# ================== НАПОМИНАНИЕ ==================
 
-async def show_summary(query):
-    chat_id = query.message.chat.id
-    meds = data_store.get(chat_id, {})
-    msg = "📋 Сводка:\n\n"
+async def reminder_job(context: ContextTypes.DEFAULT_TYPE):
+    for chat_id, meds in data_store.items():
+        for name, med in meds.items():
+            days_left = med["total_mg"] / med["daily_mg"]
 
-    for name, med in meds.items():
-        days = math.floor(med["total_mg"] / med["daily_mg"])
-        msg += f"{name} — {days} дней\n"
+            if days_left <= 7 and not med["notified"]:
+                need_mg = max(0, med["daily_mg"] * 30 - med["total_mg"])
+                lines = []
 
-    await query.message.reply_text(msg, reply_markup=main_menu())
+                for dose in sorted(set(med["packages"])):
+                    lines.append(f"{int(dose)} мг — {math.ceil(need_mg / dose)} шт")
 
-async def show_forecast(query):
-    chat_id = query.message.chat.id
-    meds = data_store.get(chat_id, {})
-    msg = "⏳ Прогноз:\n\n"
-
-    for name, med in meds.items():
-        days = math.floor(med["total_mg"] / med["daily_mg"])
-        end = med["created"] + timedelta(days=days)
-        msg += f"{name} — закончится {end.strftime('%d.%m.%Y')}\n"
-
-    await query.message.reply_text(msg, reply_markup=main_menu())
-
-# ================== НАПОМИНАНИЯ ==================
-
-async def reminder_loop(app):
-    while True:
-        today = datetime.now().date()
-
-        for chat_id, meds in data_store.items():
-            for name, med in meds.items():
-                days_left = math.floor(med["total_mg"] / med["daily_mg"])
-
-                if days_left == 7 and not med["notified"]:
-                    need_mg = (
-                        med["daily_mg"] * med["course_days"]
-                        if med["course_days"]
-                        else med["daily_mg"] * 30
-                    ) - med["total_mg"]
-
-                    text = f"⏰ {name} заканчивается через 7 дней\n\nНужно докупить:\n"
-
-                    for unit_mg, count in med["packs"].items():
-                        pills = math.ceil(need_mg / unit_mg)
-                        text += f"{int(unit_mg)} мг — {pills} шт\n"
-
-                    await app.bot.send_message(chat_id, text)
-                    med["notified"] = True
-
-        await asyncio.sleep(86400)
+                await context.bot.send_message(
+                    chat_id,
+                    f"⚠️ {name} заканчивается через {math.ceil(days_left)} дней\n"
+                    f"Нужно докупить:\n" + "\n".join(lines)
+                )
+                med["notified"] = True
 
 # ================== MAIN ==================
 
@@ -296,12 +237,12 @@ def main():
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    app.post_init = lambda app: asyncio.create_task(reminder_loop(app))
+    app.job_queue.run_daily(
+        reminder_job,
+        time=time(hour=10, minute=0)
+    )
 
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-
-
-
