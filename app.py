@@ -1,6 +1,6 @@
 import os
 import asyncio
-from datetime import datetime, timedelta  # Добавил timedelta для расчета дат
+from datetime import datetime, timedelta
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -169,7 +169,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             med["total_mg"] += added_mg
             med["notified"] = False
 
-            # Расчет данных для отчета (как в save_medicine)
+            # Расчет
             days = calc_days_left(med)
             surplus = calc_surplus(med)
 
@@ -179,12 +179,18 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Хватит на: {days} дней"
             )
 
+            # Логика сообщения для курса
             if med["course_days"]:
                 msg += f"\nДлительность курса: {med['course_days']} дней"
-
-            if surplus:
-                u, d = surplus
-                msg += f"\nИзлишек: {u} ед. — на {d} дней"
+                
+                if days < med["course_days"]:
+                    msg += "\nНа курс не хватит, нужно докупить."
+                else:
+                    if surplus:
+                        u, _ = surplus
+                        msg += f"\nНа курс хватит, останется излишек {u} ед."
+                    else:
+                        msg += "\nНа курс хватит"
 
             await update.message.reply_text(msg, reply_markup=main_menu())
             user_states.pop(chat_id)
@@ -283,12 +289,18 @@ async def save_medicine(update, chat_id):
         f"Хватит на: {days} дней"
     )
 
+    # Логика сообщения для курса
     if med["course_days"]:
         msg += f"\nДлительность курса: {med['course_days']} дней"
 
-    if surplus:
-        u, d = surplus
-        msg += f"\nИзлишек: {u} ед. — на {d} дней"
+        if days < med["course_days"]:
+            msg += "\nНа курс не хватит, нужно докупить."
+        else:
+            if surplus:
+                u, _ = surplus
+                msg += f"\nНа курс хватит, останется излишек {u} ед."
+            else:
+                msg += "\nНа курс хватит"
 
     await update.message.reply_text(msg, reply_markup=main_menu())
     user_states.pop(chat_id)
@@ -337,7 +349,6 @@ async def show_forecast(query):
         msg += f"Хватит на: {days_left} дней\n"
 
         if med["course_days"]:
-            # Расчет даты окончания курса (от текущего момента + длительность курса)
             course_end_date = now + timedelta(days=med["course_days"])
             date_str = course_end_date.strftime("%d.%m.%Y")
             
@@ -345,18 +356,15 @@ async def show_forecast(query):
 
             if surplus:
                 u, d = surplus
-                # Расчет даты, до которой хватит излишка (от текущего момента + дней излишка)
                 surplus_end_date = now + timedelta(days=d)
                 surplus_date_str = surplus_end_date.strftime("%d.%m.%Y")
                 msg += f"Излишек: {u} ед. — на {d} дней до {surplus_date_str}\n"
             
-            # Логика: хватит или нет
             if days_left >= med["course_days"]:
                 msg += "✅ На курс хватит, докупать не нужно\n"
             else:
                 msg += "⚠️ На курс не хватит, нужно докупить\n"
         else:
-            # Если курс "Пожизненно" или не указан
             msg += "♾ Приём без ограничения срока\n"
 
         msg += "\n"
