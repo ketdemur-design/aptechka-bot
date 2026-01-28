@@ -171,8 +171,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Расчет
             days = calc_days_left(med)
-            surplus = calc_surplus(med)
-
+            
             msg = (
                 f"🔄 Лекарство пополнено\n\n"
                 f"Название: {med_name}\n"
@@ -183,14 +182,21 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if med["course_days"]:
                 msg += f"\nДлительность курса: {med['course_days']} дней"
                 
-                if days < med["course_days"]:
-                    msg += "\nНа курс не хватит, нужно докупить."
+                needed_mg = med["course_days"] * med["daily_mg"]
+                # Дозировка из текущего ввода пользователя (пополнения)
+                dosage = state["data"]["unit_mg"]
+
+                if med["total_mg"] < needed_mg:
+                    deficit_mg = needed_mg - med["total_mg"]
+                    missing_units = deficit_mg / dosage
+                    msg += f"\n⚠️ На курс не хватит, нужно докупить {missing_units:g} ед. при дозировке {dosage:g} мг."
                 else:
-                    if surplus:
-                        u, _ = surplus
-                        msg += f"\nНа курс хватит, останется излишек {u} ед."
+                    surplus_mg = med["total_mg"] - needed_mg
+                    if surplus_mg > 0:
+                        surplus_units = surplus_mg / dosage
+                        msg += f"\n✅ На курс хватит, останется излишек {surplus_units:g} ед. при дозировке {dosage:g} мг."
                     else:
-                        msg += "\nНа курс хватит"
+                        msg += "\n✅ На курс хватит"
 
             await update.message.reply_text(msg, reply_markup=main_menu())
             user_states.pop(chat_id)
@@ -281,7 +287,6 @@ async def save_medicine(update, chat_id):
 
     med = data_store[chat_id][d["name"]]
     days = calc_days_left(med)
-    surplus = calc_surplus(med)
 
     msg = (
         f"✅ Лекарство добавлено\n\n"
@@ -292,15 +297,21 @@ async def save_medicine(update, chat_id):
     # Логика сообщения для курса
     if med["course_days"]:
         msg += f"\nДлительность курса: {med['course_days']} дней"
+        
+        needed_mg = med["course_days"] * med["daily_mg"]
+        dosage = d["unit_mg"]
 
-        if days < med["course_days"]:
-            msg += "\nНа курс не хватит, нужно докупить."
+        if med["total_mg"] < needed_mg:
+            deficit_mg = needed_mg - med["total_mg"]
+            missing_units = deficit_mg / dosage
+            msg += f"\n⚠️ На курс не хватит, нужно докупить {missing_units:g} ед. при дозировке {dosage:g} мг."
         else:
-            if surplus:
-                u, _ = surplus
-                msg += f"\nНа курс хватит, останется излишек {u} ед."
+            surplus_mg = med["total_mg"] - needed_mg
+            if surplus_mg > 0:
+                surplus_units = surplus_mg / dosage
+                msg += f"\n✅ На курс хватит, останется излишек {surplus_units:g} ед. при дозировке {dosage:g} мг."
             else:
-                msg += "\nНа курс хватит"
+                msg += "\n✅ На курс хватит"
 
     await update.message.reply_text(msg, reply_markup=main_menu())
     user_states.pop(chat_id)
