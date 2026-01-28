@@ -142,12 +142,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         med["notified"] = False
 
         days = calc_days_left(med)
-        surplus = calc_surplus(med)
+        # Для отображения берем unit_mg из сохраненных данных лекарства
+        dosage = med["unit_mg"]
 
-        msg = f"🔧 Дозировка изменена\n\nТеперь хватает на: {days} дней"
-        if surplus:
-            u, d = surplus
-            msg += f"\nИзлишек: {u} ед. — на {d} дней"
+        msg = (
+            f"🔧 Дозировка изменена\n\n"
+            f"Дозировка: {dosage:g} мг\n"
+            f"Теперь хватает на: {days} дней при дозировке {dosage:g} мг."
+        )
 
         await update.message.reply_text(msg, reply_markup=main_menu())
         user_states.pop(chat_id)
@@ -171,10 +173,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Расчет
             days = calc_days_left(med)
-            
+            dosage = state["data"]["unit_mg"]
+
             msg = (
                 f"🔄 Лекарство пополнено\n\n"
                 f"Название: {med_name}\n"
+                f"Дозировка: {dosage:g} мг\n"
                 f"Хватит на: {days} дней"
             )
 
@@ -183,8 +187,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += f"\nДлительность курса: {med['course_days']} дней"
                 
                 needed_mg = med["course_days"] * med["daily_mg"]
-                # Дозировка из текущего ввода пользователя (пополнения)
-                dosage = state["data"]["unit_mg"]
 
                 if med["total_mg"] < needed_mg:
                     deficit_mg = needed_mg - med["total_mg"]
@@ -196,7 +198,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         surplus_units = surplus_mg / dosage
                         msg += f"\n✅ На курс хватит, останется излишек {surplus_units:g} ед. при дозировке {dosage:g} мг."
                     else:
-                        msg += "\n✅ На курс хватит"
+                        msg += f"\n✅ На курс хватит при дозировке {dosage:g} мг."
 
             await update.message.reply_text(msg, reply_markup=main_menu())
             user_states.pop(chat_id)
@@ -287,10 +289,12 @@ async def save_medicine(update, chat_id):
 
     med = data_store[chat_id][d["name"]]
     days = calc_days_left(med)
+    dosage = d["unit_mg"]
 
     msg = (
         f"✅ Лекарство добавлено\n\n"
         f"Название: {d['name']}\n"
+        f"Дозировка: {dosage:g} мг\n"
         f"Хватит на: {days} дней"
     )
 
@@ -299,7 +303,6 @@ async def save_medicine(update, chat_id):
         msg += f"\nДлительность курса: {med['course_days']} дней"
         
         needed_mg = med["course_days"] * med["daily_mg"]
-        dosage = d["unit_mg"]
 
         if med["total_mg"] < needed_mg:
             deficit_mg = needed_mg - med["total_mg"]
@@ -311,7 +314,7 @@ async def save_medicine(update, chat_id):
                 surplus_units = surplus_mg / dosage
                 msg += f"\n✅ На курс хватит, останется излишек {surplus_units:g} ед. при дозировке {dosage:g} мг."
             else:
-                msg += "\n✅ На курс хватит"
+                msg += f"\n✅ На курс хватит при дозировке {dosage:g} мг."
 
     await update.message.reply_text(msg, reply_markup=main_menu())
     user_states.pop(chat_id)
@@ -327,17 +330,14 @@ async def show_summary(query):
     msg = "📋 Сводка:\n\n"
     for name, med in meds.items():
         days = calc_days_left(med)
-        surplus = calc_surplus(med)
+        dosage = med["unit_mg"]
 
         msg += f"Название: {name}\n"
-        msg += f"Хватит на: {days} дней\n"
+        msg += f"Дозировка: {dosage:g} мг\n"
+        msg += f"Хватит на: {days} дней при дозировке {dosage:g} мг\n"
 
         if med["course_days"]:
             msg += f"Длительность курса: {med['course_days']} дней\n"
-        
-        if surplus:
-            u, d = surplus
-            msg += f"Излишек: {u} ед. — на {d} дней\n"
         
         msg += "\n"
 
@@ -354,9 +354,10 @@ async def show_forecast(query):
 
     for name, med in meds.items():
         days_left = calc_days_left(med)
-        surplus = calc_surplus(med)
+        dosage = med["unit_mg"]
 
         msg += f"Название: {name}\n"
+        msg += f"Дозировка: {dosage:g} мг\n"
         msg += f"Хватит на: {days_left} дней\n"
 
         if med["course_days"]:
@@ -365,12 +366,6 @@ async def show_forecast(query):
             
             msg += f"Длительность курса: {med['course_days']} дней до {date_str}\n"
 
-            if surplus:
-                u, d = surplus
-                surplus_end_date = now + timedelta(days=d)
-                surplus_date_str = surplus_end_date.strftime("%d.%m.%Y")
-                msg += f"Излишек: {u} ед. — на {d} дней до {surplus_date_str}\n"
-            
             if days_left >= med["course_days"]:
                 msg += "✅ На курс хватит, докупать не нужно\n"
             else:
