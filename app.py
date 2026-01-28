@@ -60,7 +60,14 @@ FORM_LABELS = {
 # ================== HELPERS ==================
 
 def calc_days_left(med):
-    return int(med["total_mg"] // med["daily_mg"])
+    # Рассчитываем, на сколько дней хватило бы запаса изначально
+    capacity_days = med["total_mg"] // med["daily_mg"]
+    
+    # Рассчитываем, сколько дней прошло с момента добавления
+    days_passed = (datetime.now() - med["created"]).days
+    
+    # Возвращаем реальный остаток
+    return int(capacity_days - days_passed)
 
 def calc_surplus(med):
     if med["course_days"] is None:
