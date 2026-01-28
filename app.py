@@ -46,7 +46,7 @@ def form_menu():
 def course_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📆 Дни", callback_data="course_days")],
-        [InlineKeyboardButton("🗓 Месяцы", callback_data="course_months")],
+        [InlineKeyboardButton("🗓 Месяцы (30 дней)", callback_data="course_months")],
         [InlineKeyboardButton("♾ Пожизненно", callback_data="course_forever")],
     ])
 
@@ -65,8 +65,8 @@ def calc_days_left(med):
 def calc_surplus(med):
     if med["course_days"] is None:
         return None
-    needed = med["course_days"] * med["daily_mg"]
-    surplus_mg = med["total_mg"] - needed
+    needed_mg = med["course_days"] * med["daily_mg"]
+    surplus_mg = med["total_mg"] - needed_mg
     if surplus_mg <= 0:
         return None
     units = int(surplus_mg // med["unit_mg"])
@@ -105,6 +105,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     d = state["data"]
 
+    # ---------- ADD ----------
     if state["flow"] == "add":
         if state["step"] == "name":
             d["name"] = text
@@ -134,6 +135,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             d["course_days"] = value
             await save_medicine(update, chat_id)
 
+    # ---------- CHANGE DOSE ----------
     elif state["flow"] == "dose":
         med = data_store[chat_id][state["medicine"]]
         med["daily_mg"] = float(text)
@@ -149,6 +151,30 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(msg, reply_markup=main_menu())
         user_states.pop(chat_id)
+
+    # ---------- REFILL ----------
+    elif state["flow"] == "refill":
+        if state["step"] == "unit_mg":
+            state["data"]["unit_mg"] = float(text)
+            state["step"] = "units"
+            _, plural = FORM_LABELS[state["form"]]
+            await update.message.reply_text(f"Сколько {plural} купили?")
+
+        elif state["step"] == "units":
+            units = int(float(text))
+            med = data_store[chat_id][state["medicine"]]
+
+            added_mg = units * state["data"]["unit_mg"]
+            med["total_mg"] += added_mg
+            med["notified"] = False
+
+            days = calc_days_left(med)
+
+            await update.message.reply_text(
+                f"🔄 Лекарство пополнено\n\nТеперь хватит на: {days} дней",
+                reply_markup=main_menu()
+            )
+            user_states.pop(chat_id)
 
 # ================== BUTTONS ==================
 
@@ -196,9 +222,18 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if action == "dose":
             user_states[chat_id] = {"flow": "dose", "medicine": med, "data": {}}
             await query.message.reply_text("Введите новую суточную дозировку (мг):")
+
         elif action == "refill":
-            user_states[chat_id] = {"flow": "refill", "medicine": med, "step": "unit_mg", "data": {}}
+            form = data_store[chat_id][med].get("form", "tablets")
+            user_states[chat_id] = {
+                "flow": "refill",
+                "medicine": med,
+                "step": "unit_mg",
+                "form": form,
+                "data": {}
+            }
             await query.message.reply_text("Сколько мг в одной единице?")
+
         elif action == "delete":
             data_store[chat_id].pop(med)
             await query.message.reply_text("🗑 Лекарство удалено", reply_markup=main_menu())
@@ -251,14 +286,18 @@ async def show_summary(query):
     meds = data_store.get(query.message.chat.id, {})
     msg = "📋 Сводка:\n\n"
     for n, m in meds.items():
-        msg += f"{n} — {calc_days_left(m)} дней\n"
+        msg += f"{n} — остаток на {calc_days_left(m)} дней\n"
     await query.message.reply_text(msg, reply_markup=main_menu())
 
 async def show_forecast(query):
     meds = data_store.get(query.message.chat.id, {})
     msg = "⏳ Прогноз:\n\n"
     for n, m in meds.items():
-        msg += f"{n} — ~{calc_days_left(m)} дней\n"
+        days = calc_days_left(m)
+        if days <= 7:
+            msg += f"⚠️ {n} — закончится через {days} дней\n"
+        else:
+            msg += f"{n} — запас нормальный\n"
     await query.message.reply_text(msg, reply_markup=main_menu())
 
 # ================== REMINDER ==================
