@@ -1,6 +1,6 @@
 import os
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta  # Добавил timedelta для расчета дат
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -162,18 +162,31 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif state["step"] == "units":
             units = int(float(text))
-            med = data_store[chat_id][state["medicine"]]
+            med_name = state["medicine"]
+            med = data_store[chat_id][med_name]
 
             added_mg = units * state["data"]["unit_mg"]
             med["total_mg"] += added_mg
             med["notified"] = False
 
+            # Расчет данных для отчета (как в save_medicine)
             days = calc_days_left(med)
+            surplus = calc_surplus(med)
 
-            await update.message.reply_text(
-                f"🔄 Лекарство пополнено\n\nТеперь хватит на: {days} дней",
-                reply_markup=main_menu()
+            msg = (
+                f"🔄 Лекарство пополнено\n\n"
+                f"Название: {med_name}\n"
+                f"Хватит на: {days} дней"
             )
+
+            if med["course_days"]:
+                msg += f"\nДлительность курса: {med['course_days']} дней"
+
+            if surplus:
+                u, d = surplus
+                msg += f"\nИзлишек: {u} ед. — на {d} дней"
+
+            await update.message.reply_text(msg, reply_markup=main_menu())
             user_states.pop(chat_id)
 
 # ================== BUTTONS ==================
@@ -284,21 +297,71 @@ async def save_medicine(update, chat_id):
 
 async def show_summary(query):
     meds = data_store.get(query.message.chat.id, {})
+    if not meds:
+        await query.message.reply_text("Список лекарств пуст.", reply_markup=main_menu())
+        return
+
     msg = "📋 Сводка:\n\n"
-    for n, m in meds.items():
-        msg += f"{n} — остаток на {calc_days_left(m)} дней\n"
-    await query.message.reply_text(msg, reply_markup=main_menu())
+    for name, med in meds.items():
+        days = calc_days_left(med)
+        surplus = calc_surplus(med)
+
+        msg += f"Название: {name}\n"
+        msg += f"Хватит на: {days} дней\n"
+
+        if med["course_days"]:
+            msg += f"Длительность курса: {med['course_days']} дней\n"
+        
+        if surplus:
+            u, d = surplus
+            msg += f"Излишек: {u} ед. — на {d} дней\n"
+        
+        msg += "\n"
+
+    await query.message.reply_text(msg.strip(), reply_markup=main_menu())
 
 async def show_forecast(query):
     meds = data_store.get(query.message.chat.id, {})
+    if not meds:
+        await query.message.reply_text("Список лекарств пуст.", reply_markup=main_menu())
+        return
+
     msg = "⏳ Прогноз:\n\n"
-    for n, m in meds.items():
-        days = calc_days_left(m)
-        if days <= 7:
-            msg += f"⚠️ {n} — закончится через {days} дней\n"
+    now = datetime.now()
+
+    for name, med in meds.items():
+        days_left = calc_days_left(med)
+        surplus = calc_surplus(med)
+
+        msg += f"Название: {name}\n"
+        msg += f"Хватит на: {days_left} дней\n"
+
+        if med["course_days"]:
+            # Расчет даты окончания курса (от текущего момента + длительность курса)
+            course_end_date = now + timedelta(days=med["course_days"])
+            date_str = course_end_date.strftime("%d.%m.%Y")
+            
+            msg += f"Длительность курса: {med['course_days']} дней до {date_str}\n"
+
+            if surplus:
+                u, d = surplus
+                # Расчет даты, до которой хватит излишка (от текущего момента + дней излишка)
+                surplus_end_date = now + timedelta(days=d)
+                surplus_date_str = surplus_end_date.strftime("%d.%m.%Y")
+                msg += f"Излишек: {u} ед. — на {d} дней до {surplus_date_str}\n"
+            
+            # Логика: хватит или нет
+            if days_left >= med["course_days"]:
+                msg += "✅ На курс хватит, докупать не нужно\n"
+            else:
+                msg += "⚠️ На курс не хватит, нужно докупить\n"
         else:
-            msg += f"{n} — запас нормальный\n"
-    await query.message.reply_text(msg, reply_markup=main_menu())
+            # Если курс "Пожизненно" или не указан
+            msg += "♾ Приём без ограничения срока\n"
+
+        msg += "\n"
+
+    await query.message.reply_text(msg.strip(), reply_markup=main_menu())
 
 # ================== REMINDER ==================
 
