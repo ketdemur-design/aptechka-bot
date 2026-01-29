@@ -1,5 +1,6 @@
 import os
 import asyncio
+import re
 from datetime import datetime, timedelta
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -20,6 +21,17 @@ data_store = {}
 user_states = {}
 started_users = set()
 
+# Дни недели для интерфейса
+DAYS_OF_WEEK = {
+    0: "Понедельник",
+    1: "Вторник",
+    2: "Среда",
+    3: "Четверг",
+    4: "Пятница",
+    5: "Суббота",
+    6: "Воскресенье"
+}
+
 # ================== МЕНЮ ==================
 
 def start_menu():
@@ -30,6 +42,7 @@ def main_menu():
         [InlineKeyboardButton("➕ Добавить лекарство", callback_data="add")],
         [InlineKeyboardButton("🔄 Докуплено / Пополнить", callback_data="refill")],
         [InlineKeyboardButton("🔧 Изменить дозировку", callback_data="dose")],
+        [InlineKeyboardButton("⏰ Напоминание", callback_data="reminder_menu")],
         [InlineKeyboardButton("📋 Сводка", callback_data="summary")],
         [InlineKeyboardButton("⏳ Прогноз", callback_data="forecast")],
         [InlineKeyboardButton("🗑 Удалить лекарство", callback_data="delete")],
@@ -50,6 +63,25 @@ def course_menu():
         [InlineKeyboardButton("♾ Пожизненно", callback_data="course_forever")],
     ])
 
+def reminder_days_menu(chat_id, med_name):
+    # Генерируем клавиатуру с днями недели
+    keyboard = []
+    med = data_store[chat_id][med_name]
+    reminders = med.get("reminders", {})
+
+    for day_num, day_name in DAYS_OF_WEEK.items():
+        # Показываем установленное время, если есть
+        times = sorted(reminders.get(day_num, []))
+        time_str = ", ".join(times) if times else ""
+        btn_text = f"{day_name}"
+        if time_str:
+            btn_text += f" ({time_str})"
+        
+        keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"set_day:{day_num}:{med_name}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu_back")])
+    return InlineKeyboardMarkup(keyboard)
+
 FORM_LABELS = {
     "tablets": ("таблетке", "таблеток"),
     "capsules": ("капсуле", "капсул"),
@@ -60,13 +92,8 @@ FORM_LABELS = {
 # ================== HELPERS ==================
 
 def calc_days_left(med):
-    # Рассчитываем, на сколько дней хватило бы запаса изначально
     capacity_days = med["total_mg"] // med["daily_mg"]
-    
-    # Рассчитываем, сколько дней прошло с момента добавления
     days_passed = (datetime.now() - med["created"]).days
-    
-    # Возвращаем реальный остаток
     return int(capacity_days - days_passed)
 
 def calc_surplus(med):
@@ -149,7 +176,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         med["notified"] = False
 
         days = calc_days_left(med)
-        # Для отображения берем unit_mg из сохраненных данных лекарства
         dosage = med["unit_mg"]
 
         msg = (
@@ -178,7 +204,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             med["total_mg"] += added_mg
             med["notified"] = False
 
-            # Расчет
             days = calc_days_left(med)
             dosage = state["data"]["unit_mg"]
 
@@ -189,12 +214,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Хватит на: {days} дней"
             )
 
-            # Логика сообщения для курса
             if med["course_days"]:
                 msg += f"\nДлительность курса: {med['course_days']} дней"
-                
                 needed_mg = med["course_days"] * med["daily_mg"]
-
                 if med["total_mg"] < needed_mg:
                     deficit_mg = needed_mg - med["total_mg"]
                     missing_units = deficit_mg / dosage
@@ -210,6 +232,48 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(msg, reply_markup=main_menu())
             user_states.pop(chat_id)
 
+    # ---------- SET TIME (REMINDER) ----------
+    elif state["flow"] == "set_reminder_time":
+        time_text = update.message.text.strip().replace(".", ":")
+        # Простая проверка формата времени HH:MM
+        if not re.match(r"^\d{1,2}:\d{2}$", time_text):
+            await update.message.reply_text("⚠️ Неверный формат. Введите время в формате ЧЧ:ММ (например, 09:00 или 14:30).")
+            return
+
+        # Приводим к формату HH:MM (добавляем 0, если нужно, например 9:00 -> 09:00)
+        h, m = time_text.split(":")
+        formatted_time = f"{int(h):02}:{int(m):02}"
+
+        med_name = state["medicine"]
+        day_num = state["day_num"]
+        
+        med = data_store[chat_id][med_name]
+        
+        # Сохраняем время
+        if day_num not in med["reminders"]:
+            med["reminders"][day_num] = []
+        
+        if formatted_time not in med["reminders"][day_num]:
+            med["reminders"][day_num].append(formatted_time)
+            med["reminders"][day_num].sort()
+
+        # Предлагаем добавить еще время
+        day_name = DAYS_OF_WEEK[day_num]
+        kb = [
+            [InlineKeyboardButton("➕ Добавить время", callback_data=f"add_time:{day_num}:{med_name}")],
+            [InlineKeyboardButton("🔙 К выбору дней", callback_data=f"back_to_days:{med_name}")]
+        ]
+        
+        await update.message.reply_text(
+            f"✅ Добавлено время {formatted_time} на {day_name} для {med_name}.\n"
+            f"Хотите добавить ещё время на этот день или вернуться?",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+        # Сбрасываем ожидание текста, чтобы нажатие кнопок работало, но сохраняем контекст
+        # (в данном случае мы ждем нажатия кнопки, если юзер напишет текст - ничего не произойдет 
+        # или попадет в else, поэтому лучше сбросить step)
+        state["step"] = None
+
 # ================== BUTTONS ==================
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -221,6 +285,11 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "start_bot":
         started_users.add(chat_id)
         await query.message.reply_text("Главное меню:", reply_markup=main_menu())
+        
+    elif data == "main_menu_back":
+        await query.message.reply_text("Главное меню:", reply_markup=main_menu())
+        if chat_id in user_states:
+            user_states.pop(chat_id)
 
     elif data == "add":
         user_states[chat_id] = {"flow": "add", "step": "name", "data": {}}
@@ -243,6 +312,59 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["step"] = "course_value"
             await query.message.reply_text("Введите количество:")
 
+    elif data == "reminder_menu":
+        meds = list(data_store.get(chat_id, {}).keys())
+        if not meds:
+            await query.message.reply_text("Лекарств нет, добавьте их сначала.", reply_markup=main_menu())
+            return
+        kb = [[InlineKeyboardButton(m, callback_data=f"rem_select:{m}")] for m in meds]
+        kb.append([InlineKeyboardButton("🔙 Назад", callback_data="main_menu_back")])
+        await query.message.reply_text("Выберите лекарство для настройки напоминаний:", reply_markup=InlineKeyboardMarkup(kb))
+
+    elif data.startswith("rem_select:"):
+        med_name = data.split(":", 1)[1]
+        await query.message.reply_text(
+            f"Настройка напоминаний для: {med_name}\n"
+            f"Выберите день недели:",
+            reply_markup=reminder_days_menu(chat_id, med_name)
+        )
+    
+    elif data.startswith("set_day:"):
+        _, day_num_str, med_name = data.split(":")
+        day_num = int(day_num_str)
+        day_name = DAYS_OF_WEEK[day_num]
+        
+        user_states[chat_id] = {
+            "flow": "set_reminder_time", 
+            "medicine": med_name, 
+            "day_num": day_num,
+            "data": {}
+        }
+        
+        await query.message.reply_text(
+            f"Выбран день: {day_name}\n"
+            f"Введите время (например, 09:00, 14:00, 20:30):"
+        )
+
+    elif data.startswith("add_time:"):
+        _, day_num_str, med_name = data.split(":")
+        day_num = int(day_num_str)
+        # Повторно активируем режим ввода времени
+        user_states[chat_id] = {
+            "flow": "set_reminder_time", 
+            "medicine": med_name, 
+            "day_num": day_num,
+            "data": {}
+        }
+        await query.message.reply_text("Введите время:")
+
+    elif data.startswith("back_to_days:"):
+        med_name = data.split(":", 1)[1]
+        await query.message.reply_text(
+            f"Настройка напоминаний для: {med_name}\nВыберите день:", 
+            reply_markup=reminder_days_menu(chat_id, med_name)
+        )
+
     elif data in ("dose", "refill", "delete"):
         meds = list(data_store.get(chat_id, {}).keys())
         if not meds:
@@ -251,7 +373,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [[InlineKeyboardButton(m, callback_data=f"{data}:{m}")] for m in meds]
         await query.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(kb))
 
-    elif ":" in data:
+    elif ":" in data and not data.startswith(("rem_", "set_", "add_", "back_")):
         action, med = data.split(":")
         if action == "dose":
             user_states[chat_id] = {"flow": "dose", "medicine": med, "data": {}}
@@ -292,6 +414,8 @@ async def save_medicine(update, chat_id):
         "course_days": d.get("course_days"),
         "created": datetime.now(),
         "notified": False,
+        "reminders": {},  # {day_int: [time_str, ...]}
+        "course_end_notified": False
     }
 
     med = data_store[chat_id][d["name"]]
@@ -305,7 +429,6 @@ async def save_medicine(update, chat_id):
         f"Хватит на: {days} дней"
     )
 
-    # Логика сообщения для курса
     if med["course_days"]:
         msg += f"\nДлительность курса: {med['course_days']} дней"
         
@@ -384,9 +507,10 @@ async def show_forecast(query):
 
     await query.message.reply_text(msg.strip(), reply_markup=main_menu())
 
-# ================== REMINDER ==================
+# ================== SCHEDULED LOOPS ==================
 
 async def reminder_loop(app):
+    """Цикл напоминаний о том, что лекарства заканчиваются (за 7 дней)"""
     while True:
         for chat_id, meds in data_store.items():
             for name, m in meds.items():
@@ -400,10 +524,50 @@ async def reminder_loop(app):
                             f"Пора купить 💊"
                         )
                         m["notified"] = True
-        await asyncio.sleep(86400)
+        await asyncio.sleep(86400) # Проверка раз в сутки
+
+async def pill_reminder_loop(app):
+    """Цикл минутных проверок для отправки напоминаний о приеме и окончании курса"""
+    while True:
+        now = datetime.now()
+        current_day = now.weekday() # 0 = Понедельник
+        current_time = now.strftime("%H:%M")
+
+        for chat_id, meds in data_store.items():
+            for name, med in meds.items():
+                # 1. Проверка окончания курса
+                if med["course_days"]:
+                    days_passed = (now - med["created"]).days
+                    # Если прошло дней >= курса, значит курс завершен
+                    if days_passed >= med["course_days"]:
+                        if not med.get("course_end_notified"):
+                            # Отправляем сообщение об окончании курса
+                            await app.bot.send_message(
+                                chat_id,
+                                f"Курс \"{name}\" {med['course_days']} дней {med['total_mg']:g} мг завершен"
+                            )
+                            med["course_end_notified"] = True
+                        # Если курс завершен, напоминания о приеме не шлем
+                        continue 
+                
+                # 2. Проверка напоминаний о приеме
+                reminders = med.get("reminders", {})
+                if current_day in reminders:
+                    if current_time in reminders[current_day]:
+                        # Чтобы не спамить в течение одной минуты, можно добавить проверку last_reminded
+                        # Но для простоты используем sleep(60) в конце цикла, что в целом решает проблему
+                        dosage = med["unit_mg"] # Дозировка из карточки
+                        await app.bot.send_message(
+                            chat_id,
+                            f"Напоминание - выпейте {name} {dosage:g} мг"
+                        )
+
+        # Ждем 60 секунд до следующей проверки времени
+        await asyncio.sleep(60)
 
 async def post_init(app):
     app.create_task(reminder_loop(app))
+    app.create_task(pill_reminder_loop(app))
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
