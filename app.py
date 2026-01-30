@@ -25,10 +25,11 @@ data_store = {}
 user_states = {}
 started_users = set()
 
-# Список дней для отображения
+# Обновил названия на полные, как на скриншоте
 DAYS_MAP = {
     "Everyday": "Каждый день",
-    "0": "Пн", "1": "Вт", "2": "Ср", "3": "Чт", "4": "Пт", "5": "Сб", "6": "Вс"
+    "0": "Понедельник", "1": "Вторник", "2": "Среда", "3": "Четверг",
+    "4": "Пятница", "5": "Суббота", "6": "Воскресенье"
 }
 
 # ================== МЕНЮ ==================
@@ -65,34 +66,39 @@ def course_menu():
 
 def days_menu(med_name, times_dict=None):
     """
-    Меню выбора дней недели.
-    Добавляет '✅' к дням, где уже установлено время.
+    Меню выбора дней недели (Вертикальный список с временем).
     """
-    # Защита от None или неправильного типа
     if not isinstance(times_dict, dict):
         times_dict = {}
 
-    def label(key, text):
-        # Если в расписании есть этот ключ и список времени не пуст — ставим галочку
-        if key in times_dict and times_dict[key]:
-            return f"{text} ✅"
-        return text
+    keyboard = []
 
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(label("Everyday", "🔄 Каждый день"), callback_data=f"set_day:{med_name}:Everyday")],
-        [
-            InlineKeyboardButton(label("0", "Пн"), callback_data=f"set_day:{med_name}:0"),
-            InlineKeyboardButton(label("1", "Вт"), callback_data=f"set_day:{med_name}:1"),
-            InlineKeyboardButton(label("2", "Ср"), callback_data=f"set_day:{med_name}:2"),
-            InlineKeyboardButton(label("3", "Чт"), callback_data=f"set_day:{med_name}:3"),
-        ],
-        [
-            InlineKeyboardButton(label("4", "Пт"), callback_data=f"set_day:{med_name}:4"),
-            InlineKeyboardButton(label("5", "Сб"), callback_data=f"set_day:{med_name}:5"),
-            InlineKeyboardButton(label("6", "Вс"), callback_data=f"set_day:{med_name}:6"),
-        ],
-        [InlineKeyboardButton("🔙 В меню", callback_data="main_menu")]
-    ])
+    # 1. Кнопка "Каждый день"
+    everyday_text = "🔄 Каждый день"
+    if "Everyday" in times_dict and times_dict["Everyday"]:
+        # Добавляем время в скобках, если оно есть
+        time_str = ", ".join(times_dict["Everyday"])
+        everyday_text += f" ({time_str})"
+    
+    keyboard.append([InlineKeyboardButton(everyday_text, callback_data=f"set_day:{med_name}:Everyday")])
+
+    # 2. Кнопки дней недели (0=Пн ... 6=Вс)
+    for i in range(7):
+        day_key = str(i)
+        day_name = DAYS_MAP[day_key]
+        
+        button_text = day_name
+        # Если для этого дня есть время — показываем его
+        if day_key in times_dict and times_dict[day_key]:
+            time_str = ", ".join(times_dict[day_key])
+            button_text += f" ({time_str})"
+        
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"set_day:{med_name}:{day_key}")])
+
+    # 3. Кнопка назад
+    keyboard.append([InlineKeyboardButton("🔙 В меню", callback_data="main_menu")])
+
+    return InlineKeyboardMarkup(keyboard)
 
 FORM_LABELS = {
     "tablets": ("таблетке", "таблеток"),
@@ -172,8 +178,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
 
-    # Проверка на наличие состояния. Если состояние есть, обрабатываем его,
-    # даже если пользователя нет в started_users (например, после перезагрузки бота)
     state = user_states.get(chat_id)
     
     if not state:
@@ -219,7 +223,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             med_name = state["medicine"]
             day_key = state["day_key"]
             
-            # --- БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ДАННЫХ ---
+            # === БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ДАННЫХ ===
             if chat_id not in data_store or med_name not in data_store[chat_id]:
                 await update.message.reply_text("❌ Ошибка: лекарство не найдено. Начните сначала.")
                 user_states.pop(chat_id, None)
@@ -227,10 +231,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             med_data = data_store[chat_id][med_name]
             
-            # Принудительная конвертация старого формата (список) в новый (словарь)
+            # Принудительная конвертация
             if "times" not in med_data or not isinstance(med_data["times"], dict):
                 med_data["times"] = {}
-            # -----------------------------------
 
             if text.lower() in ["0", "нет", "удалить", "off", "выкл"]:
                 if day_key in med_data["times"]:
@@ -254,21 +257,19 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 status_msg = f"✅ Сохранено: {DAYS_MAP.get(day_key, day_key)} — {', '.join(times)}"
 
             times_dict = med_data["times"]
-            schedule_text = format_schedule(times_dict)
             
-            # Удаляем состояние, чтобы следующее сообщение не попало сюда же
+            # Удаляем состояние ввода
             user_states.pop(chat_id)
 
             await update.message.reply_text(
                 f"{status_msg}\n\n"
-                f"📅 Расписание для «{med_name}»:\n{schedule_text}\n\n"
                 f"Выберите следующий день для настройки:",
                 reply_markup=days_menu(med_name, times_dict)
             )
             
         except Exception as e:
             print(f"Error in set_reminder: {e}")
-            await update.message.reply_text(f"❌ Произошла системная ошибка. Попробуйте снова.")
+            await update.message.reply_text(f"❌ Произошла ошибка. Попробуйте снова.")
             user_states.pop(chat_id, None)
 
     # ---------- CHANGE DOSE ----------
