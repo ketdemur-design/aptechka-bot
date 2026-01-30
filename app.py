@@ -68,11 +68,10 @@ def days_menu(med_name, times_dict=None):
     Меню выбора дней недели.
     Добавляет '✅' к дням, где уже установлено время.
     """
-    if times_dict is None:
+    if times_dict is None or not isinstance(times_dict, dict):
         times_dict = {}
 
     def label(key, text):
-        # Если в расписании есть этот ключ и список времени не пуст — ставим галочку
         if key in times_dict and times_dict[key]:
             return f"{text} ✅"
         return text
@@ -139,7 +138,7 @@ def parse_times(text):
 
 def format_schedule(times_dict):
     """Форматирует расписание для вывода в текст"""
-    if not times_dict:
+    if not times_dict or not isinstance(times_dict, dict):
         return "не установлено"
     if "Everyday" in times_dict and times_dict["Everyday"]:
         return f"Каждый день: {', '.join(times_dict['Everyday'])}"
@@ -218,43 +217,49 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ---------- SET REMINDER (SPECIFIC DAY) ----------
     elif state["flow"] == "set_reminder":
-        med_name = state["medicine"]
-        day_key = state["day_key"]
-        
-        # Обновление данных (удаление или установка)
-        if text.lower() in ["0", "нет", "удалить", "off", "выкл"]:
-            if day_key in data_store[chat_id][med_name]["times"]:
-                del data_store[chat_id][med_name]["times"][day_key]
-            status_msg = f"🗑 Удалено время для «{med_name}» ({DAYS_MAP.get(day_key, day_key)})"
-        else:
-            times = parse_times(text)
-            if not times:
-                await update.message.reply_text("⚠️ Не удалось распознать время. Введите в формате ЧЧ:ММ (или '0' для удаления)")
-                return
+        try:
+            med_name = state["medicine"]
+            day_key = state["day_key"]
             
-            if day_key == "Everyday":
-                data_store[chat_id][med_name]["times"] = {"Everyday": times}
-            else:
-                if "Everyday" in data_store[chat_id][med_name]["times"]:
-                    del data_store[chat_id][med_name]["times"]["Everyday"]
-                data_store[chat_id][med_name]["times"][day_key] = times
-            
-            status_msg = f"✅ Сохранено: {DAYS_MAP.get(day_key, day_key)} — {', '.join(times)}"
+            # === ИСПРАВЛЕНИЕ ОШИБКИ ===
+            # Если у лекарства старый формат данных (список), меняем на словарь
+            med_data = data_store[chat_id][med_name]
+            if "times" not in med_data or not isinstance(med_data["times"], dict):
+                med_data["times"] = {}
+            # ==========================
 
-        # После сохранения ПОКАЗЫВАЕМ ОБЩЕЕ МЕНЮ ДНЕЙ С ОБНОВЛЕННЫМИ ДАННЫМИ
-        times_dict = data_store[chat_id][med_name].get("times", {})
-        schedule_text = format_schedule(times_dict)
-        
-        await update.message.reply_text(
-            f"{status_msg}\n\n"
-            f"📅 Текущее расписание для «{med_name}»:\n{schedule_text}\n\n"
-            f"Выберите следующий день для настройки:",
-            reply_markup=days_menu(med_name, times_dict)
-        )
-        # Мы остаемся в flow set_reminder, но user_states можно сбросить, 
-        # так как следующее нажатие кнопки перезапишет state["day_key"]
-        # Однако, чтобы избежать ошибок, лучше оставить state или сбросить. 
-        # При нажатии кнопки меню сработает callback, который перезапишет state.
+            if text.lower() in ["0", "нет", "удалить", "off", "выкл"]:
+                if day_key in med_data["times"]:
+                    del med_data["times"][day_key]
+                status_msg = f"🗑 Удалено время для «{med_name}» ({DAYS_MAP.get(day_key, day_key)})"
+            else:
+                times = parse_times(text)
+                if not times:
+                    await update.message.reply_text("⚠️ Не удалось распознать время. Введите в формате ЧЧ:ММ (или '0' для удаления)")
+                    return
+                
+                if day_key == "Everyday":
+                    med_data["times"] = {"Everyday": times}
+                else:
+                    if "Everyday" in med_data["times"]:
+                        del med_data["times"]["Everyday"]
+                    med_data["times"][day_key] = times
+                
+                status_msg = f"✅ Сохранено: {DAYS_MAP.get(day_key, day_key)} — {', '.join(times)}"
+
+            times_dict = med_data["times"]
+            schedule_text = format_schedule(times_dict)
+            
+            await update.message.reply_text(
+                f"{status_msg}\n\n"
+                f"📅 Текущее расписание для «{med_name}»:\n{schedule_text}\n\n"
+                f"Выберите следующий день для настройки:",
+                reply_markup=days_menu(med_name, times_dict)
+            )
+        except Exception as e:
+            print(f"Error setting reminder: {e}")
+            await update.message.reply_text("❌ Произошла ошибка при сохранении. Попробуйте выбрать лекарство заново.")
+            user_states.pop(chat_id, None)
 
     # ---------- CHANGE DOSE ----------
     elif state["flow"] == "dose":
@@ -391,11 +396,14 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("open_days:"):
         med_name = data.split(":")[1]
-        # Показываем текущее расписание
-        times_dict = data_store[chat_id][med_name].get("times", {})
+        
+        # Исправление старых данных (если список -> словарь)
+        if "times" not in data_store[chat_id][med_name] or not isinstance(data_store[chat_id][med_name]["times"], dict):
+            data_store[chat_id][med_name]["times"] = {}
+            
+        times_dict = data_store[chat_id][med_name]["times"]
         schedule_text = format_schedule(times_dict)
         
-        # Передаем times_dict в days_menu для галочек
         await query.message.reply_text(
             f"📅 Расписание для «{med_name}»:\n\n{schedule_text}\n\nВыберите день для настройки:",
             reply_markup=days_menu(med_name, times_dict)
@@ -501,6 +509,10 @@ async def show_summary(query):
         dosage = med["unit_mg"]
         status = "▶️ Идет прием" if med.get("is_started") else "⏸ Ожидание старта"
         
+        # Защита от старых данных
+        if not isinstance(med.get("times"), dict):
+             med["times"] = {}
+             
         schedule_text = format_schedule(med.get("times", {}))
 
         msg += f"Название: {name} ({status})\n"
@@ -557,20 +569,20 @@ async def reminder_loop(app):
         try:
             now_msk = get_now()
             current_time_str = now_msk.strftime("%H:%M")
-            # День недели: 0=Пн, 6=Вс. Преобразуем в строку для ключа словаря
             current_weekday = str(now_msk.weekday()) 
             
             for chat_id, meds in data_store.items():
                 for name, m in meds.items():
                     
-                    # 1. Напоминание по времени (только если курс начат и есть расписание)
+                    # Защита от старых данных в цикле
+                    if not isinstance(m.get("times"), dict):
+                        continue
+
+                    # 1. Напоминание по времени
                     if m.get("is_started") and m.get("times"):
                         times_for_today = []
-                        
-                        # Если стоит "Каждый день"
                         if "Everyday" in m["times"]:
                             times_for_today = m["times"]["Everyday"]
-                        # Если есть настройка для конкретного дня недели
                         elif current_weekday in m["times"]:
                             times_for_today = m["times"][current_weekday]
                             
@@ -581,7 +593,7 @@ async def reminder_loop(app):
                                 f"Дозировка: {m['unit_mg']:g} мг"
                             )
 
-                    # 2. Напоминание об остатках (в 09:00 МСК)
+                    # 2. Напоминание об остатках (09:00 МСК)
                     if now_msk.hour == 9 and now_msk.minute == 0:
                         if not m["notified"]:
                             days = calc_days_left(m)
@@ -594,7 +606,6 @@ async def reminder_loop(app):
                                 )
                                 m["notified"] = True 
                                 
-                    # Сброс флага (в полночь)
                     if now_msk.hour == 0 and now_msk.minute == 0:
                         m["notified"] = False
 
