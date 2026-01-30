@@ -63,20 +63,32 @@ def course_menu():
         [InlineKeyboardButton("♾ Пожизненно", callback_data="course_forever")],
     ])
 
-def days_menu(med_name):
-    """Меню выбора дней недели для настройки времени"""
+def days_menu(med_name, times_dict=None):
+    """
+    Меню выбора дней недели.
+    Добавляет '✅' к дням, где уже установлено время.
+    """
+    if times_dict is None:
+        times_dict = {}
+
+    def label(key, text):
+        # Если в расписании есть этот ключ и список времени не пуст — ставим галочку
+        if key in times_dict and times_dict[key]:
+            return f"{text} ✅"
+        return text
+
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔄 Каждый день", callback_data=f"set_day:{med_name}:Everyday")],
+        [InlineKeyboardButton(label("Everyday", "🔄 Каждый день"), callback_data=f"set_day:{med_name}:Everyday")],
         [
-            InlineKeyboardButton("Пн", callback_data=f"set_day:{med_name}:0"),
-            InlineKeyboardButton("Вт", callback_data=f"set_day:{med_name}:1"),
-            InlineKeyboardButton("Ср", callback_data=f"set_day:{med_name}:2"),
-            InlineKeyboardButton("Чт", callback_data=f"set_day:{med_name}:3"),
+            InlineKeyboardButton(label("0", "Пн"), callback_data=f"set_day:{med_name}:0"),
+            InlineKeyboardButton(label("1", "Вт"), callback_data=f"set_day:{med_name}:1"),
+            InlineKeyboardButton(label("2", "Ср"), callback_data=f"set_day:{med_name}:2"),
+            InlineKeyboardButton(label("3", "Чт"), callback_data=f"set_day:{med_name}:3"),
         ],
         [
-            InlineKeyboardButton("Пт", callback_data=f"set_day:{med_name}:4"),
-            InlineKeyboardButton("Сб", callback_data=f"set_day:{med_name}:5"),
-            InlineKeyboardButton("Вс", callback_data=f"set_day:{med_name}:6"),
+            InlineKeyboardButton(label("4", "Пт"), callback_data=f"set_day:{med_name}:4"),
+            InlineKeyboardButton(label("5", "Сб"), callback_data=f"set_day:{med_name}:5"),
+            InlineKeyboardButton(label("6", "Вс"), callback_data=f"set_day:{med_name}:6"),
         ],
         [InlineKeyboardButton("🔙 В меню", callback_data="main_menu")]
     ])
@@ -95,21 +107,12 @@ def get_now():
     return datetime.now(TZ_MOSCOW)
 
 def calc_days_left(med):
-    # Рассчитываем общую емкость
     capacity_days = int(med["total_mg"] // med["daily_mg"])
-    
-    # Если курс еще не начат, возвращаем полный запас
     if not med.get("is_started") or not med.get("start_date"):
         return capacity_days
-    
-    # Если начат, считаем сколько дней прошло
     start_dt = med["start_date"]
     now_dt = get_now()
-    
-    # Разница в днях
     days_passed = (now_dt - start_dt).days
-    
-    # Чтобы не уйти в минус
     left = capacity_days - days_passed
     return left
 
@@ -125,41 +128,27 @@ def calc_surplus(med):
     return units, days
 
 def parse_times(text):
-    """
-    Парсит время из строки. 
-    Понимает: 8:00, 08.00, 8 00, 20:30
-    Разделители: запятая, пробел, точка с запятой, новая строка
-    """
     clean_text = text.replace(",", " ").replace(";", " ").replace(".", ":").replace("\n", " ")
-    # Ищем шаблоны времени ЧЧ:ММ
     times = re.findall(r'\b([0-9]{1,2})[:]([0-9]{2})\b', clean_text)
-    
     valid_times = []
     for h, m in times:
         hh, mm = int(h), int(m)
         if 0 <= hh <= 23 and 0 <= mm <= 59:
             valid_times.append(f"{hh:02d}:{mm:02d}")
-            
     return sorted(list(set(valid_times)))
 
 def format_schedule(times_dict):
     """Форматирует расписание для вывода в текст"""
     if not times_dict:
         return "не установлено"
-    
-    # Если есть настройка "Каждый день", показываем её приоритетно
     if "Everyday" in times_dict and times_dict["Everyday"]:
         return f"Каждый день: {', '.join(times_dict['Everyday'])}"
-    
-    # Иначе собираем по дням
     lines = []
-    # Сортируем ключи (дни недели 0-6)
     sorted_days = sorted([k for k in times_dict.keys() if k != "Everyday"])
     for day in sorted_days:
         if times_dict[day]:
             day_name = DAYS_MAP.get(day, day)
             lines.append(f"{day_name}: {', '.join(times_dict[day])}")
-    
     if not lines:
         return "не установлено"
     return "\n".join(lines)
@@ -225,51 +214,47 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if d["course_type"] == "months":
                 value *= 30
             d["course_days"] = value
-            
-            # Сразу сохраняем, время не спрашиваем
             await save_medicine(update, chat_id)
 
     # ---------- SET REMINDER (SPECIFIC DAY) ----------
     elif state["flow"] == "set_reminder":
         med_name = state["medicine"]
         day_key = state["day_key"]
-        day_label = DAYS_MAP.get(day_key, day_key)
         
-        # Проверка на удаление
+        # Обновление данных (удаление или установка)
         if text.lower() in ["0", "нет", "удалить", "off", "выкл"]:
-            # Удаляем запись для этого дня
             if day_key in data_store[chat_id][med_name]["times"]:
                 del data_store[chat_id][med_name]["times"][day_key]
-                
-            await update.message.reply_text(
-                f"🔕 Напоминания для «{med_name}» ({day_label}) удалены.",
-                reply_markup=days_menu(med_name)
-            )
+            status_msg = f"🗑 Удалено время для «{med_name}» ({DAYS_MAP.get(day_key, day_key)})"
         else:
-            # Парсинг времени
             times = parse_times(text)
             if not times:
                 await update.message.reply_text("⚠️ Не удалось распознать время. Введите в формате ЧЧ:ММ (или '0' для удаления)")
                 return
             
-            # Если выбираем "Каждый день", очищаем индивидуальные дни, чтобы не было конфликтов
             if day_key == "Everyday":
                 data_store[chat_id][med_name]["times"] = {"Everyday": times}
             else:
-                # Если настраиваем конкретный день, удаляем "Everyday", если он был
                 if "Everyday" in data_store[chat_id][med_name]["times"]:
                     del data_store[chat_id][med_name]["times"]["Everyday"]
-                
                 data_store[chat_id][med_name]["times"][day_key] = times
-                
-            await update.message.reply_text(
-                f"✅ {day_label}: установлено время {', '.join(times)} для «{med_name}»", 
-                reply_markup=days_menu(med_name)
-            )
+            
+            status_msg = f"✅ Сохранено: {DAYS_MAP.get(day_key, day_key)} — {', '.join(times)}"
+
+        # После сохранения ПОКАЗЫВАЕМ ОБЩЕЕ МЕНЮ ДНЕЙ С ОБНОВЛЕННЫМИ ДАННЫМИ
+        times_dict = data_store[chat_id][med_name].get("times", {})
+        schedule_text = format_schedule(times_dict)
         
-        # Мы не удаляем user_states полностью, чтобы человек мог настроить другой день
-        # Просто сбрасываем шаг (но flow остается set_reminder)
-        # Хотя для простоты возврата в меню кнопок достаточно просто ответа
+        await update.message.reply_text(
+            f"{status_msg}\n\n"
+            f"📅 Текущее расписание для «{med_name}»:\n{schedule_text}\n\n"
+            f"Выберите следующий день для настройки:",
+            reply_markup=days_menu(med_name, times_dict)
+        )
+        # Мы остаемся в flow set_reminder, но user_states можно сбросить, 
+        # так как следующее нажатие кнопки перезапишет state["day_key"]
+        # Однако, чтобы избежать ошибок, лучше оставить state или сбросить. 
+        # При нажатии кнопки меню сработает callback, который перезапишет state.
 
     # ---------- CHANGE DOSE ----------
     elif state["flow"] == "dose":
@@ -410,13 +395,13 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         times_dict = data_store[chat_id][med_name].get("times", {})
         schedule_text = format_schedule(times_dict)
         
+        # Передаем times_dict в days_menu для галочек
         await query.message.reply_text(
             f"📅 Расписание для «{med_name}»:\n\n{schedule_text}\n\nВыберите день для настройки:",
-            reply_markup=days_menu(med_name)
+            reply_markup=days_menu(med_name, times_dict)
         )
 
     elif data.startswith("set_day:"):
-        # set_day:Aspirin:0 (или Everyday)
         _, med_name, day_key = data.split(":")
         
         user_states[chat_id] = {
