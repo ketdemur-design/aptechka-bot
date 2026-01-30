@@ -1,1 +1,2 @@
-pip install pytz
+python-telegram-bot
+pytz
