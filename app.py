@@ -66,10 +66,14 @@ def course_menu():
     ])
 
 def days_menu(med_name, times_dict=None):
+    """
+    Меню выбора дней недели (Вертикальный список с временем).
+    """
     if not isinstance(times_dict, dict):
         times_dict = {}
 
     keyboard = []
+
     # 1. Кнопка "Каждый день"
     everyday_text = "🔄 Каждый день"
     if "Everyday" in times_dict and times_dict["Everyday"]:
@@ -78,18 +82,21 @@ def days_menu(med_name, times_dict=None):
     
     keyboard.append([InlineKeyboardButton(everyday_text, callback_data=f"set_day:{med_name}:Everyday")])
 
-    # 2. Кнопки дней недели
+    # 2. Кнопки дней недели (0=Пн ... 6=Вс)
     for i in range(7):
         day_key = str(i)
         day_name = DAYS_MAP[day_key]
+        
         button_text = day_name
         if day_key in times_dict and times_dict[day_key]:
             time_str = ", ".join(times_dict[day_key])
             button_text += f" ({time_str})"
+        
         keyboard.append([InlineKeyboardButton(button_text, callback_data=f"set_day:{med_name}:{day_key}")])
 
-    # 3. Назад
+    # 3. Кнопка назад
     keyboard.append([InlineKeyboardButton("🔙 В меню", callback_data="main_menu")])
+
     return InlineKeyboardMarkup(keyboard)
 
 FORM_LABELS = {
@@ -103,6 +110,7 @@ FORM_LABELS = {
 # ================== HELPERS ==================
 
 def get_now():
+    """Возвращает текущее время по Москве"""
     return datetime.now(TZ_MOSCOW)
 
 def calc_days_left(med):
@@ -127,6 +135,7 @@ def parse_times(text):
     return sorted(list(set(valid_times)))
 
 def format_schedule(times_dict):
+    """Форматирует расписание для вывода в текст"""
     if not isinstance(times_dict, dict):
         return "не установлено"
     if "Everyday" in times_dict and times_dict["Everyday"]:
@@ -379,6 +388,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Специальный вопрос для капель
         if form == "drops":
+            user_states[chat_id]["step"] = "unit_mg"  # <--- ИСПРАВЛЕНО ЗДЕСЬ
             await query.message.reply_text("Объем флакона (мл)?")
         else:
             singular, _ = FORM_LABELS.get(form, ("единице", "единиц"))
