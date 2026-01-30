@@ -25,7 +25,7 @@ data_store = {}
 user_states = {}
 started_users = set()
 
-# Обновил названия на полные, как на скриншоте
+# Список дней для отображения
 DAYS_MAP = {
     "Everyday": "Каждый день",
     "0": "Понедельник", "1": "Вторник", "2": "Среда", "3": "Четверг",
@@ -53,6 +53,7 @@ def form_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("💊 Таблетки", callback_data="form_tablets")],
         [InlineKeyboardButton("💊 Капсулы", callback_data="form_capsules")],
+        [InlineKeyboardButton("👁 Глазные капли", callback_data="form_drops")],
         [InlineKeyboardButton("📦 Саше", callback_data="form_sachet")],
         [InlineKeyboardButton("🧴 Жидкая форма", callback_data="form_liquid")],
     ])
@@ -65,39 +66,30 @@ def course_menu():
     ])
 
 def days_menu(med_name, times_dict=None):
-    """
-    Меню выбора дней недели (Вертикальный список с временем).
-    """
     if not isinstance(times_dict, dict):
         times_dict = {}
 
     keyboard = []
-
     # 1. Кнопка "Каждый день"
     everyday_text = "🔄 Каждый день"
     if "Everyday" in times_dict and times_dict["Everyday"]:
-        # Добавляем время в скобках, если оно есть
         time_str = ", ".join(times_dict["Everyday"])
         everyday_text += f" ({time_str})"
     
     keyboard.append([InlineKeyboardButton(everyday_text, callback_data=f"set_day:{med_name}:Everyday")])
 
-    # 2. Кнопки дней недели (0=Пн ... 6=Вс)
+    # 2. Кнопки дней недели
     for i in range(7):
         day_key = str(i)
         day_name = DAYS_MAP[day_key]
-        
         button_text = day_name
-        # Если для этого дня есть время — показываем его
         if day_key in times_dict and times_dict[day_key]:
             time_str = ", ".join(times_dict[day_key])
             button_text += f" ({time_str})"
-        
         keyboard.append([InlineKeyboardButton(button_text, callback_data=f"set_day:{med_name}:{day_key}")])
 
-    # 3. Кнопка назад
+    # 3. Назад
     keyboard.append([InlineKeyboardButton("🔙 В меню", callback_data="main_menu")])
-
     return InlineKeyboardMarkup(keyboard)
 
 FORM_LABELS = {
@@ -105,15 +97,16 @@ FORM_LABELS = {
     "capsules": ("капсуле", "капсул"),
     "sachet": ("саше", "саше"),
     "liquid": ("бутылке", "бутылок"),
+    "drops": ("флаконе", "флаконов"),
 }
 
 # ================== HELPERS ==================
 
 def get_now():
-    """Возвращает текущее время по Москве"""
     return datetime.now(TZ_MOSCOW)
 
 def calc_days_left(med):
+    # total_mg хранит "единицы ресурса" (мг для таблеток, капли для капель)
     capacity_days = int(med["total_mg"] // med["daily_mg"])
     if not med.get("is_started") or not med.get("start_date"):
         return capacity_days
@@ -134,26 +127,26 @@ def parse_times(text):
     return sorted(list(set(valid_times)))
 
 def format_schedule(times_dict):
-    """Форматирует расписание для вывода в текст"""
     if not isinstance(times_dict, dict):
         return "не установлено"
-    
-    # Если есть "Каждый день"
     if "Everyday" in times_dict and times_dict["Everyday"]:
         return f"Каждый день: {', '.join(times_dict['Everyday'])}"
-    
     lines = []
-    # Сортируем ключи (дни недели 0-6)
     days_present = [k for k in times_dict.keys() if k != "Everyday" and times_dict[k]]
     sorted_days = sorted(days_present)
-    
     for day in sorted_days:
         day_name = DAYS_MAP.get(day, day)
         lines.append(f"{day_name}: {', '.join(times_dict[day])}")
-    
     if not lines:
         return "не установлено"
     return "\n".join(lines)
+
+def get_display_units(med):
+    """Возвращает правильные единицы измерения для текста"""
+    form = med.get("form", "tablets")
+    if form == "drops":
+        return "мл", "капель"
+    return "мг", "мг"
 
 # ================== START ==================
 
@@ -179,7 +172,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
     state = user_states.get(chat_id)
-    
     if not state:
         if chat_id not in started_users:
             await start(update, context)
@@ -196,14 +188,18 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif state["step"] == "unit_mg":
             d["unit_mg"] = float(text.replace(",", "."))
-            _, plural = FORM_LABELS[d["form"]]
+            _, plural = FORM_LABELS.get(d["form"], ("единице", "единиц"))
             state["step"] = "units"
             await update.message.reply_text(f"Сколько {plural} купили?")
 
         elif state["step"] == "units":
             d["units"] = int(float(text.replace(",", ".")))
             state["step"] = "daily_mg"
-            await update.message.reply_text("Сколько мг в сутки принимаете?")
+            # Разный текст для капель и таблеток
+            if d.get("form") == "drops":
+                await update.message.reply_text("Сколько капель в сутки назначено?")
+            else:
+                await update.message.reply_text("Сколько мг в сутки принимаете?")
 
         elif state["step"] == "daily_mg":
             d["daily_mg"] = float(text.replace(",", "."))
@@ -223,15 +219,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             med_name = state["medicine"]
             day_key = state["day_key"]
             
-            # === БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ДАННЫХ ===
             if chat_id not in data_store or med_name not in data_store[chat_id]:
-                await update.message.reply_text("❌ Ошибка: лекарство не найдено. Начните сначала.")
+                await update.message.reply_text("❌ Ошибка: лекарство не найдено.")
                 user_states.pop(chat_id, None)
                 return
 
             med_data = data_store[chat_id][med_name]
-            
-            # Принудительная конвертация
             if "times" not in med_data or not isinstance(med_data["times"], dict):
                 med_data["times"] = {}
 
@@ -245,11 +238,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text("⚠️ Не удалось распознать время. Введите в формате ЧЧ:ММ (или '0' для удаления)")
                     return
                 
-                # Если выбрали "Каждый день" - очищаем всё остальное
                 if day_key == "Everyday":
                     med_data["times"] = {"Everyday": times}
                 else:
-                    # Если настраиваем конкретный день, удаляем "Everyday"
                     if "Everyday" in med_data["times"]:
                         del med_data["times"]["Everyday"]
                     med_data["times"][day_key] = times
@@ -257,8 +248,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 status_msg = f"✅ Сохранено: {DAYS_MAP.get(day_key, day_key)} — {', '.join(times)}"
 
             times_dict = med_data["times"]
-            
-            # Удаляем состояние ввода
             user_states.pop(chat_id)
 
             await update.message.reply_text(
@@ -279,12 +268,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         med["notified"] = False
 
         days = calc_days_left(med)
+        unit_label, dose_label = get_display_units(med)
         dosage = med["unit_mg"]
 
         msg = (
             f"🔧 Дозировка изменена\n\n"
-            f"Дозировка: {dosage:g} мг\n"
-            f"Теперь хватает на: {days} дней при дозировке {dosage:g} мг."
+            f"Дозировка: {dosage:g} {unit_label}\n"
+            f"Теперь хватает на: {days} дней при расходе {med['daily_mg']:g} {dose_label}/сутки."
         )
 
         await update.message.reply_text(msg, reply_markup=main_menu())
@@ -295,43 +285,69 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if state["step"] == "unit_mg":
             state["data"]["unit_mg"] = float(text.replace(",", "."))
             state["step"] = "units"
-            _, plural = FORM_LABELS[state["form"]]
+            _, plural = FORM_LABELS.get(state["form"], ("единице", "единиц"))
             await update.message.reply_text(f"Сколько {plural} купили?")
 
         elif state["step"] == "units":
             units = int(float(text.replace(",", ".")))
             med_name = state["medicine"]
             med = data_store[chat_id][med_name]
+            
+            new_unit_size = state["data"]["unit_mg"]
+            
+            # РАСЧЕТ ДОБАВЛЕНИЯ
+            if med.get("form") == "drops":
+                # Переводим мл в капли: (мл / 0.05) * количество
+                added_resource = (new_unit_size / 0.05) * units
+            else:
+                # Обычный расчет (мг * количество)
+                added_resource = new_unit_size * units
 
-            added_mg = units * state["data"]["unit_mg"]
-            med["total_mg"] += added_mg
+            med["total_mg"] += added_resource
             med["notified"] = False
 
             days = calc_days_left(med)
-            dosage = state["data"]["unit_mg"]
+            unit_label, dose_label = get_display_units(med)
 
             msg = (
                 f"🔄 Лекарство пополнено\n\n"
                 f"Название: {med_name}\n"
-                f"Дозировка: {dosage:g} мг\n"
+                f"Добавлено: {units} ед. по {new_unit_size:g} {unit_label}\n"
                 f"Хватит на: {days} дней"
             )
 
+            # Проверка курса
             if med["course_days"]:
                 msg += f"\nДлительность курса: {med['course_days']} дней"
-                needed_mg = med["course_days"] * med["daily_mg"]
+                needed_resource = med["course_days"] * med["daily_mg"]
 
-                if med["total_mg"] < needed_mg:
-                    deficit_mg = needed_mg - med["total_mg"]
-                    missing_units = deficit_mg / dosage
-                    msg += f"\n⚠️ На курс не хватит, нужно докупить {missing_units:g} ед. при дозировке {dosage:g} мг."
-                else:
-                    surplus_mg = med["total_mg"] - needed_mg
-                    if surplus_mg > 0:
-                        surplus_units = surplus_mg / dosage
-                        msg += f"\n✅ На курс хватит, останется излишек {surplus_units:g} ед. при дозировке {dosage:g} мг."
+                if med["total_mg"] < needed_resource:
+                    deficit = needed_resource - med["total_mg"]
+                    # Для отображения сколько докупить, конвертируем дефицит обратно в единицы (флаконы/таблетки)
+                    # Используем размер последней введенной единицы (new_unit_size)
+                    if med.get("form") == "drops":
+                        # deficit в каплях -> переводим в мл -> делим на объем флакона
+                        deficit_ml = deficit * 0.05
+                        missing_units = deficit_ml / new_unit_size
+                        dose_text = f"{new_unit_size:g} мл"
                     else:
-                        msg += f"\n✅ На курс хватит при дозировке {dosage:g} мг."
+                        missing_units = deficit / new_unit_size
+                        dose_text = f"{new_unit_size:g} мг"
+
+                    msg += f"\n⚠️ На курс не хватит, нужно докупить {missing_units:g} ед. при объеме/дозировке {dose_text}."
+                else:
+                    surplus = med["total_mg"] - needed_resource
+                    if surplus > 0:
+                        if med.get("form") == "drops":
+                            surplus_val = surplus * 0.05 # в мл
+                            surplus_units = surplus_val / new_unit_size
+                            dose_text = f"{new_unit_size:g} мл"
+                        else:
+                            surplus_units = surplus / new_unit_size
+                            dose_text = f"{new_unit_size:g} мг"
+                        msg += f"\n✅ На курс хватит, останется излишек {surplus_units:g} ед."
+                    else:
+                        msg += f"\n✅ На курс хватит ровно."
 
             await update.message.reply_text(msg, reply_markup=main_menu())
             user_states.pop(chat_id)
@@ -360,9 +376,14 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("form_"):
         form = data.split("_")[1]
         user_states[chat_id]["data"]["form"] = form
-        singular, _ = FORM_LABELS[form]
-        user_states[chat_id]["step"] = "unit_mg"
-        await query.message.reply_text(f"Сколько мг в одной {singular}?")
+        
+        # Специальный вопрос для капель
+        if form == "drops":
+            await query.message.reply_text("Объем флакона (мл)?")
+        else:
+            singular, _ = FORM_LABELS.get(form, ("единице", "единиц"))
+            user_states[chat_id]["step"] = "unit_mg"
+            await query.message.reply_text(f"Сколько мг в одной {singular}?")
 
     elif data.startswith("course_"):
         state = user_states[chat_id]
@@ -407,15 +428,11 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("open_days:"):
         med_name = data.split(":")[1]
-        
-        # Защита: создаем структуру, если её нет
         if med_name in data_store[chat_id]:
             med_data = data_store[chat_id][med_name]
             if "times" not in med_data or not isinstance(med_data["times"], dict):
                 med_data["times"] = {}
-            
             times_dict = med_data["times"]
-            
             await query.message.reply_text(
                 f"📅 Настройка: «{med_name}».\nВыберите день недели:",
                 reply_markup=days_menu(med_name, times_dict)
@@ -423,16 +440,12 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("set_day:"):
         _, med_name, day_key = data.split(":")
-        
         user_states[chat_id] = {
             "flow": "set_reminder", 
             "medicine": med_name,
             "day_key": day_key
         }
-        
         day_label = DAYS_MAP.get(day_key, day_key)
-        
-        # Редактируем сообщение (чтобы интерфейс не прыгал)
         await query.edit_message_text(
             f"⏰ Введите время для «{med_name}» ({day_label}).\n"
             f"Формат: 8:00, 20:00 (через запятую).\n"
@@ -451,8 +464,13 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif ":" in data:
         action, med = data.split(":")
         if action == "dose":
+            med_data = data_store[chat_id][med]
             user_states[chat_id] = {"flow": "dose", "medicine": med, "data": {}}
-            await query.message.reply_text("Введите новую суточную дозировку (мг):")
+            
+            if med_data.get("form") == "drops":
+                await query.message.reply_text("Введите новую суточную дозировку (капель):")
+            else:
+                await query.message.reply_text("Введите новую суточную дозировку (мг):")
 
         elif action == "refill":
             form = data_store[chat_id][med].get("form", "tablets")
@@ -463,7 +481,10 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "form": form,
                 "data": {}
             }
-            await query.message.reply_text("Сколько мг в одной единице?")
+            if form == "drops":
+                await query.message.reply_text("Объем флакона (мл)?")
+            else:
+                await query.message.reply_text("Сколько мг в одной единице?")
 
         elif action == "delete":
             data_store[chat_id].pop(med)
@@ -479,33 +500,53 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def save_medicine(update, chat_id):
     d = user_states[chat_id]["data"]
-    total_mg = d["unit_mg"] * d["units"]
+    
+    # Расчет общего количества ресурса
+    unit_size = d["unit_mg"] # Это либо мг, либо мл (если капли)
+    units_count = d["units"]
+    
+    if d.get("form") == "drops":
+        # Если капли: (мл / 0.05) * кол-во = общее кол-во капель
+        total_resource = (unit_size / 0.05) * units_count
+    else:
+        # Если остальное: мг * кол-во = общее кол-во мг
+        total_resource = unit_size * units_count
 
     data_store.setdefault(chat_id, {})
     data_store[chat_id][d["name"]] = {
-        "daily_mg": d["daily_mg"],
-        "unit_mg": d["unit_mg"],
-        "total_mg": total_mg,
+        "form": d.get("form", "tablets"), # Сохраняем форму
+        "daily_mg": d["daily_mg"],       # Это либо мг/день, либо капли/день
+        "unit_mg": d["unit_mg"],         # Это либо мг (в таблетке), либо мл (во флаконе)
+        "total_mg": total_resource,      # Общий запас (мг или капли)
         "course_days": d.get("course_days"),
         "created": get_now(),
         "is_started": False,
         "start_date": None,
-        "times": {}, # Словарь для расписания
+        "times": {},
         "notified": False,
     }
 
     med = data_store[chat_id][d["name"]]
     days = calc_days_left(med)
-    dosage = d["unit_mg"]
+    
+    # Формирование сообщения
+    if d.get("form") == "drops":
+        msg = (
+            f"✅ Лекарство добавлено (Глазные капли)\n\n"
+            f"Название: {d['name']}\n"
+            f"Объем флакона: {d['unit_mg']:g} мл\n"
+            f"Дозировка: {d['daily_mg']:g} капель/сутки\n"
+            f"Хватит на: {days} дней"
+        )
+    else:
+        msg = (
+            f"✅ Лекарство добавлено\n\n"
+            f"Название: {d['name']}\n"
+            f"Дозировка: {d['unit_mg']:g} мг\n"
+            f"Хватит на: {days} дней"
+        )
 
-    msg = (
-        f"✅ Лекарство добавлено\n\n"
-        f"Название: {d['name']}\n"
-        f"Дозировка: {dosage:g} мг\n"
-        f"Хватит на: {days} дней\n\n"
-        f"⚠️ Нажмите «▶️ Начать курс» для старта отсчета.\n"
-        f"⏰ Для настройки времени приема нажмите «Напоминание»."
-    )
+    msg += "\n\n⚠️ Нажмите «▶️ Начать курс» для старта отсчета."
 
     await update.message.reply_text(msg, reply_markup=main_menu())
     user_states.pop(chat_id)
@@ -521,19 +562,21 @@ async def show_summary(query):
     msg = "📋 Сводка:\n\n"
     for name, med in meds.items():
         days = calc_days_left(med)
-        dosage = med["unit_mg"]
         status = "▶️ Идет прием" if med.get("is_started") else "⏸ Ожидание старта"
         
-        # Защита от старых данных
-        if not isinstance(med.get("times"), dict):
-             med["times"] = {}
-             
+        if not isinstance(med.get("times"), dict): med["times"] = {}
         schedule_text = format_schedule(med.get("times", {}))
+        
+        unit_label, dose_label = get_display_units(med)
 
         msg += f"Название: {name} ({status})\n"
-        msg += f"Дозировка: {dosage:g} мг\n"
+        if med.get("form") == "drops":
+            msg += f"Объем флакона: {med['unit_mg']:g} {unit_label}\n"
+        else:
+            msg += f"Дозировка: {med['unit_mg']:g} {unit_label}\n"
+            
         msg += f"Время приема:\n{schedule_text}\n"
-        msg += f"Хватит на: {days} дней при дозировке {dosage:g} мг\n"
+        msg += f"Хватит на: {days} дней при расходе {med['daily_mg']:g} {dose_label}/сутки\n"
 
         if med["course_days"]:
             msg += f"Длительность курса: {med['course_days']} дней\n"
@@ -552,10 +595,14 @@ async def show_forecast(query):
 
     for name, med in meds.items():
         days_left = calc_days_left(med)
-        dosage = med["unit_mg"]
+        unit_label, _ = get_display_units(med)
         
         msg += f"Название: {name}\n"
-        msg += f"Дозировка: {dosage:g} мг\n"
+        if med.get("form") == "drops":
+            msg += f"Объем: {med['unit_mg']:g} {unit_label}\n"
+        else:
+            msg += f"Дозировка: {med['unit_mg']:g} {unit_label}\n"
+            
         msg += f"Хватит на: {days_left} дней\n"
 
         if med["course_days"]:
@@ -584,16 +631,13 @@ async def reminder_loop(app):
         try:
             now_msk = get_now()
             current_time_str = now_msk.strftime("%H:%M")
-            # День недели: 0=Пн, 6=Вс. Преобразуем в строку для ключа словаря
             current_weekday = str(now_msk.weekday()) 
             
             for chat_id, meds in data_store.items():
                 for name, m in meds.items():
-                    
-                    if not isinstance(m.get("times"), dict):
-                        continue
+                    if not isinstance(m.get("times"), dict): continue
 
-                    # 1. Напоминание по времени
+                    # 1. Время приема
                     if m.get("is_started") and m.get("times"):
                         times_for_today = []
                         if "Everyday" in m["times"]:
@@ -602,13 +646,20 @@ async def reminder_loop(app):
                             times_for_today = m["times"][current_weekday]
                             
                         if current_time_str in times_for_today:
+                            # Определяем текст дозировки для уведомления
+                            dose_text = f"{m['daily_mg']:g}"
+                            if m.get("form") == "drops":
+                                dose_text += " капель"
+                            else:
+                                dose_text += " мг"
+
                             await app.bot.send_message(
                                 chat_id,
                                 f"⏰ Время принимать лекарство: {name}\n"
-                                f"Дозировка: {m['unit_mg']:g} мг"
+                                f"Дозировка (суточная): {dose_text}"
                             )
 
-                    # 2. Напоминание об остатках (09:00 МСК)
+                    # 2. Остатки (09:00)
                     if now_msk.hour == 9 and now_msk.minute == 0:
                         if not m["notified"]:
                             days = calc_days_left(m)
@@ -620,7 +671,7 @@ async def reminder_loop(app):
                                     f"Пора купить 💊"
                                 )
                                 m["notified"] = True 
-                                
+                    
                     if now_msk.hour == 0 and now_msk.minute == 0:
                         m["notified"] = False
 
