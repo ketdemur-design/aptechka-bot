@@ -1,0 +1,7 @@
+version: '3.8'
+services:
+  astro-bot:
+    build: .
+    restart: always
+    env_file:
+      - .env
