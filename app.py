@@ -18,7 +18,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN не найден")
 
-BOT_VERSION = os.getenv("BOT_VERSION", "2.0.0")
+BOT_VERSION = os.getenv("BOT_VERSION", "1.0.0")
 
 # Жестко задаем часовой пояс Москвы
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
