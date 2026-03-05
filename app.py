@@ -14,14 +14,25 @@ from telegram.ext import (
     filters,
 )
 
-BOT_VERSION = "1.1.0"
-
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    if chat_id not in started_users:
+        started_users.add(chat_id)
+        # Добавили BOT_VERSION в текст ниже
+        await update.message.reply_text(
+            f"Привет 👋 (Версия: {1})\n\n"
+            "Я работаю по московскому времени (MSK).\n"
+            "Я помогу:\n"
+            "• следить за остатками лекарств 💊\n"
+            "• напоминать о приеме по времени (по дням недели) ⏰\n"
+            "• напоминать о покупке за 7 дней\n\n"
+            "Нажми «Начать», чтобы запустить меню 👇",
+            reply_markup=start_menu()
+        )
+        
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN не найден")
-
-# Жестко задаем часовой пояс Москвы
-TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 
 data_store = {}
 user_states = {}
@@ -695,6 +706,32 @@ async def reminder_loop(app):
 
 async def post_init(app):
     app.create_task(reminder_loop(app))
+
+# ... здесь заканчивается функция reminder_loop или show_forecast ...
+
+async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
+    """Эта функция вызывается через 20 минут после нажатия кнопки 'Напомнить позже'"""
+    job = context.job
+    med_name = job.data['med_name']
+    chat_id = job.data['chat_id']
+    
+    meds = data_store.get(chat_id, {})
+    if med_name in meds:
+        m = meds[med_name]
+        # Используем обновленную функцию получения единиц (мл или мг)
+        unit_label, _ = get_display_units(m)
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")]])
+        
+        await context.bot.send_message(
+            chat_id, 
+            f"🔔 Повторное напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {unit_label}",
+            reply_markup=keyboard
+        )
+
+# Вот ваша существующая функция main, она остается в самом низу
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    # ... и так далее
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
