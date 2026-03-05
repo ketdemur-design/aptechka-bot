@@ -14,21 +14,26 @@ from telegram.ext import (
     filters,
 )
 
+# ... импорты ...
+TZ_MOSCOW = pytz.timezone('Europe/Moscow')
+
+BOT_VERSION = "1.1.0" # Должно быть здесь
+
+data_store = {}
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    if chat_id not in started_users:
-        started_users.add(chat_id)
-        # Добавили BOT_VERSION в текст ниже
-        await update.message.reply_text(
-            f"Привет 👋 (Версия: {1})\n\n"
-            "Я работаю по московскому времени (MSK).\n"
-            "Я помогу:\n"
-            "• следить за остатками лекарств 💊\n"
-            "• напоминать о приеме по времени (по дням недели) ⏰\n"
-            "• напоминать о покупке за 7 дней\n\n"
-            "Нажми «Начать», чтобы запустить меню 👇",
-            reply_markup=start_menu()
-        )
+    # Убираем проверку if chat_id not in started_users
+    started_users.add(chat_id) 
+    await update.message.reply_text(
+        f"Привет 👋 (Версия: {BOT_VERSION})\n\n"  # Теперь версия будет видна всегда
+        "Я работаю по московскому времени (MSK).\n"
+        "Я помогу:\n"
+        "• следить за остатками лекарств 💊\n"
+        "• напоминать о приеме по времени ⏰\n\n"
+        "Нажми «Начать», чтобы запустить меню 👇",
+        reply_markup=start_menu()
+    )
         
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -385,7 +390,8 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "start_bot":
         started_users.add(chat_id)
-        await query.message.reply_text("Главное меню:", reply_markup=main_menu())
+        # Замените строку ниже, чтобы увидеть версию в меню
+        await query.message.reply_text(f"Главное меню (v{BOT_VERSION}):", reply_markup=main_menu())
         
     elif data == "main_menu":
         if chat_id in user_states:
