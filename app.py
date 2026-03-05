@@ -15,7 +15,7 @@ from telegram.ext import (
 )
 
 # 7. Возможность указания версии бота
-BOT_VERSION = "2.1.0"
+BOT_VERSION = "3"
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
