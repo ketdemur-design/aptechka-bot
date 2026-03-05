@@ -14,12 +14,38 @@ from telegram.ext import (
     filters,
 )
 
-# ... импорты ...
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
+BOT_VERSION = "1.1.2"  # Ваша версия
 
-BOT_VERSION = "1.1.0" # Должно быть здесь
+# Обновленный маппинг дней
+DAYS_MAP = {
+    "Everyday": "Каждый день",
+    "Weekdays": "Будни (Пн-Пт)",
+    "Weekends": "Выходные (Сб-Вс)",
+    "0": "Понедельник", "1": "Вторник", "2": "Среда", "3": "Четверг",
+    "4": "Пятница", "5": "Суббота", "6": "Воскресенье"
+}
 
-data_store = {}
+def get_display_units(med):
+    """Возвращает правильные единицы измерения (мл для жидкостей)"""
+    form = med.get("form", "tablets")
+    if form == "drops":
+        return "капель", "капель"
+    if form == "liquid":
+        return "мл", "мл"
+    return "мг", "мг"
+
+def parse_times(text):
+    """Парсинг времени, включая поддержку 24:00 -> 00:00"""
+    clean_text = text.replace(",", " ").replace(";", " ").replace(".", ":").replace("\n", " ")
+    times = re.findall(r'\b([0-9]{1,2})[:]([0-9]{2})\b', clean_text)
+    valid_times = []
+    for h, m in times:
+        hh, mm = int(h), int(m)
+        if hh == 24 and mm == 0: hh = 0 
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            valid_times.append(f"{hh:02d}:{mm:02d}")
+    return sorted(list(set(valid_times)))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -86,37 +112,25 @@ def course_menu():
     ])
 
 def days_menu(med_name, times_dict=None):
-    """
-    Меню выбора дней недели (Вертикальный список с временем).
-    """
-    if not isinstance(times_dict, dict):
-        times_dict = {}
-
+    if not isinstance(times_dict, dict): times_dict = {}
     keyboard = []
-
-    # 1. Кнопка "Каждый день"
-    everyday_text = "🔄 Каждый день"
-    if "Everyday" in times_dict and times_dict["Everyday"]:
-        time_str = ", ".join(times_dict["Everyday"])
-        everyday_text += f" ({time_str})"
     
-    keyboard.append([InlineKeyboardButton(everyday_text, callback_data=f"set_day:{med_name}:Everyday")])
+    # Групповые кнопки
+    for key in ["Everyday", "Weekdays", "Weekends"]:
+        text = f"📅 {DAYS_MAP[key]}"
+        if times_dict.get(key):
+            text += f" ({', '.join(times_dict[key])})"
+        keyboard.append([InlineKeyboardButton(text, callback_data=f"set_day:{med_name}:{key}")])
 
-    # 2. Кнопки дней недели (0=Пн ... 6=Вс)
+    # Одиночные дни
     for i in range(7):
         day_key = str(i)
-        day_name = DAYS_MAP[day_key]
-        
-        button_text = day_name
-        if day_key in times_dict and times_dict[day_key]:
-            time_str = ", ".join(times_dict[day_key])
-            button_text += f" ({time_str})"
-        
-        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"set_day:{med_name}:{day_key}")])
+        text = DAYS_MAP[day_key]
+        if times_dict.get(day_key):
+            text += f" ({', '.join(times_dict[day_key])})"
+        keyboard.append([InlineKeyboardButton(text, callback_data=f"set_day:{med_name}:{day_key}")])
 
-    # 3. Кнопка назад
     keyboard.append([InlineKeyboardButton("🔙 В меню", callback_data="main_menu")])
-
     return InlineKeyboardMarkup(keyboard)
 
 FORM_LABELS = {
@@ -381,6 +395,22 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_states.pop(chat_id)
 
 # ================== BUTTONS ==================
+
+if data.startswith("taken:"):
+        med_name = data.split(":")[1]
+        await query.edit_message_text(f"✅ Прием «{med_name}» отмечен. Молодец!")
+        return
+
+    elif data.startswith("later:"):
+        med_name = data.split(":")[1]
+        context.job_queue.run_once(send_delayed_reminder, when=1200, data={'chat_id': chat_id, 'med_name': med_name})
+        await query.edit_message_text(f"⏳ Напомню про «{med_name}» через 20 минут.")
+        return
+
+    if data == "start_bot":
+        started_users.add(chat_id)
+        await query.message.reply_text(f"Главное меню (v{BOT_VERSION}):", reply_markup=main_menu())
+        return
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -716,18 +746,13 @@ async def post_init(app):
 # ... здесь заканчивается функция reminder_loop или show_forecast ...
 
 async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
-    """Эта функция вызывается через 20 минут после нажатия кнопки 'Напомнить позже'"""
     job = context.job
-    med_name = job.data['med_name']
-    chat_id = job.data['chat_id']
-    
+    med_name, chat_id = job.data['med_name'], job.data['chat_id']
     meds = data_store.get(chat_id, {})
     if med_name in meds:
         m = meds[med_name]
-        # Используем обновленную функцию получения единиц (мл или мг)
         unit_label, _ = get_display_units(m)
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")]])
-        
         await context.bot.send_message(
             chat_id, 
             f"🔔 Повторное напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {unit_label}",
