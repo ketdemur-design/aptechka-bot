@@ -194,18 +194,17 @@ def get_display_units(med):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    if chat_id not in started_users:
-        started_users.add(chat_id)
-        await update.message.reply_text(
-            "Привет 👋\n\n"
-            "Я работаю по московскому времени (MSK).\n"
-            "Я помогу:\n"
-            "• следить за остатками лекарств 💊\n"
-            "• напоминать о приеме по времени (по дням недели) ⏰\n"
-            "• напоминать о покупке за 7 дней\n\n"
-            "Нажми «Начать», чтобы запустить меню 👇",
-            reply_markup=start_menu()
-        )
+    started_users.add(chat_id)
+    await update.message.reply_text(
+        "Привет 👋\n\n"
+        "Я работаю по московскому времени (MSK).\n"
+        "Я помогу:\n"
+        "• следить за остатками лекарств 💊\n"
+        "• напоминать о приеме по времени (по дням недели) ⏰\n"
+        "• напоминать о покупке за 7 дней\n\n"
+        "Нажми «Начать», чтобы запустить меню 👇",
+        reply_markup=start_menu()
+    )
 
 # ================== TEXT ==================
 
@@ -396,33 +395,26 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================== BUTTONS ==================
 
-if data.startswith("taken:"):
-        med_name = data.split(":")[1]
-        await query.edit_message_text(f"✅ Прием «{med_name}» отмечен. Молодец!")
-        return
-
-    elif data.startswith("later:"):
-        med_name = data.split(":")[1]
-        context.job_queue.run_once(send_delayed_reminder, when=1200, data={'chat_id': chat_id, 'med_name': med_name})
-        await query.edit_message_text(f"⏳ Напомню про «{med_name}» через 20 минут.")
-        return
-
-    if data == "start_bot":
-        started_users.add(chat_id)
-        await query.message.reply_text(f"Главное меню (v{BOT_VERSION}):", reply_markup=main_menu())
-        return
-
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     chat_id = query.message.chat.id
     data = query.data
 
-    if data == "start_bot":
+    if data.startswith("taken:"):
+        med_name = data.split(":")[1]
+        await query.edit_message_text(f"✅ Прием «{med_name}» отмечен. Молодец!")
+
+    elif data.startswith("later:"):
+        med_name = data.split(":")[1]
+        context.job_queue.run_once(send_delayed_reminder, when=1200, data={'chat_id': chat_id, 'med_name': med_name})
+        await query.edit_message_text(f"⏳ Напомню про «{med_name}» через 20 минут.")
+
+    elif data == "start_bot":
         started_users.add(chat_id)
         # Замените строку ниже, чтобы увидеть версию в меню
         await query.message.reply_text(f"Главное меню (v{BOT_VERSION}):", reply_markup=main_menu())
-        
+
     elif data == "main_menu":
         if chat_id in user_states:
             user_states.pop(chat_id)
