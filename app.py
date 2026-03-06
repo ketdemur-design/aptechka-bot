@@ -123,8 +123,7 @@ def days_menu(med_name, times_dict=None):
         text = f"📅 {DAYS_MAP[key]}"
         if times_dict.get(key):
             text += f" ({', '.join(times_dict[key])})"
-        keyboard.append([InlineKeyboardButton("🔙 Перезапустить бота", callback_data="main_menu")])
-    return InlineKeyboardMarkup(keyboard)
+        keyboard.append([InlineKeyboardButton(text, callback_data=f"set_day:{med_name}:{key}")])
 
     # Одиночные дни
     for i in range(7):
@@ -137,9 +136,9 @@ def days_menu(med_name, times_dict=None):
     keyboard.append([InlineKeyboardButton("🔙 В меню", callback_data="main_menu")])
     return InlineKeyboardMarkup(keyboard)
 
-"tablets": ("таблетке", "таблеток"),
+FORM_LABELS = {
+    "tablets": ("таблетке", "таблеток"),
     "capsules": ("капсуле", "капсул"),
-    "sachet": ("саше", "саше"),
     "liquid": ("бутылке", "бутылок"),
     "drops": ("флаконе", "флаконов"),
     "spray": ("флаконе", "флаконов"), # Добавлено
@@ -220,6 +219,15 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
 
+    if text.lower() in {"старт", "начать", "start", "/start", "🚀 старт"}:
+        started_users.add(chat_id)
+        user_states.pop(chat_id, None)
+        await update.message.reply_text(
+            f"Бот перезапущен (v{BOT_VERSION}). Главное меню:",
+            reply_markup=main_menu(),
+        )
+        return
+
     # --- НОВЫЙ БЛОК: Распознавание нижних кнопок ---
     if text == "➕ Добавить лекарство":
         user_states[chat_id] = {"flow": "add", "step": "name", "data": {}}
@@ -234,7 +242,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [[InlineKeyboardButton(m, callback_data=f"start_now:{m}")] for m in not_started]
         await update.message.reply_text("Выберите курс для старта:", reply_markup=InlineKeyboardMarkup(kb))
         return
-    elif text == "🔄 Докуплено / Пополнить":
+    elif text == "🔄 Докуплено / Пополнить" or text == "♻️ Докуплено / Пополнить":
         meds = list(data_store.get(chat_id, {}).keys())
         if not meds:
             await update.message.reply_text("Лекарств нет")
@@ -242,7 +250,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [[InlineKeyboardButton(m, callback_data=f"refill:{m}")] for m in meds]
         await update.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(kb))
         return
-    elif text == "🔧 Изменить дозировку":
+    elif text == "🔧 Изменить дозировку" or text == "🛠️ Изменить дозировку":
         meds = list(data_store.get(chat_id, {}).keys())
         if not meds:
             await update.message.reply_text("Лекарств нет")
