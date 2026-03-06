@@ -643,12 +643,14 @@ async def show_summary(query):
                 msg += f"Курс: еще {remaining_days} дн. (до {end_date.strftime('%d.%m.%Y')})\n"
                 
                 if days_left >= remaining_days:
-                    msg += "✅ На остаток курса хватит\n"
+                    msg += "✅ На курс хватит\n" # Исправлено здесь
                 else:
                     msg += "⚠️ Нужно докупить таблетки!\n"
             else:
                 msg += f"Курс: {med['course_days']} дней (не начат)\n"
-                if days_left < med["course_days"]:
+                if days_left >= med["course_days"]:
+                    msg += "✅ На курс хватит\n" # Добавлено для единообразия
+                else:
                     msg += "⚠️ На весь курс не хватит\n"
         else:
             msg += "♾ Приём: бессрочно\n"
