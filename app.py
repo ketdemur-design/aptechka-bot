@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import pytz
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove # Добавьте это к остальным импортам
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import BotCommand, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -780,7 +780,7 @@ async def reminder_loop(app):
 
 async def post_init(app):
     await app.bot.set_my_commands([
-        BotCommand("start", "Перезапустить бота"),
+        BotCommand("start", "перезапустить бота"),
     ])
     app.create_task(reminder_loop(app))
 
