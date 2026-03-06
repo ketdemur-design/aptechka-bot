@@ -3,6 +3,7 @@ import asyncio
 import re
 from datetime import datetime, timedelta
 import pytz
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove # Добавьте это к остальным импортам
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -49,16 +50,16 @@ def parse_times(text):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    # Убираем проверку if chat_id not in started_users
-    started_users.add(chat_id) 
+    started_users.add(chat_id)
     await update.message.reply_text(
-        f"Привет 👋 (Версия: {BOT_VERSION})\n\n"  # Теперь версия будет видна всегда
+        f"Привет 👋 (v{BOT_VERSION})\n\n"
         "Я работаю по московскому времени (MSK).\n"
         "Я помогу:\n"
         "• следить за остатками лекарств 💊\n"
-        "• напоминать о приеме по времени ⏰\n\n"
+        "• напоминать о приеме по времени (по дням недели) ⏰\n"
+        "• напоминать о покупке за 7 дней\n\n"
         "Нажми «Начать», чтобы запустить меню 👇",
-        reply_markup=start_menu()
+        reply_markup=start_menu() # Здесь оставляем Inline кнопку "Начать"
     )
         
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -83,17 +84,17 @@ DAYS_MAP = {
 def start_menu():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Начать", callback_data="start_bot")]])
 
-def main_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Добавить лекарство", callback_data="add")],
-        [InlineKeyboardButton("▶️ Начать курс", callback_data="start_course")],
-        [InlineKeyboardButton("🔄 Докуплено / Пополнить", callback_data="refill")],
-        [InlineKeyboardButton("🔧 Изменить дозировку", callback_data="dose")],
-        [InlineKeyboardButton("⏰ Напоминание (Дни/Время)", callback_data="reminder_menu")],
-        [InlineKeyboardButton("📋 Мои курсы и прогноз", callback_data="meds_info")], # callback_data="meds_info"
-        [InlineKeyboardButton("🗑 Удалить лекарство", callback_data="delete")],
-    ])
+from telegram import ReplyKeyboardMarkup # Добавьте этот импорт в начало, если его нет
 
+def main_menu():
+    return ReplyKeyboardMarkup([
+        ["➕ Добавить лекарство", "▶️ Начать курс"],
+        ["🔄 Докуплено / Пополнить", "🔧 Изменить дозировку"],
+        ["⏰ Напоминание (Дни/Время)"],
+        ["📋 Мои курсы и прогноз"],
+        ["🗑 Удалить лекарство"]
+    ], resize_keyboard=True)
+    
 def form_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("💊 Таблетки", callback_data="form_tablets")],
@@ -195,14 +196,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     started_users.add(chat_id)
     await update.message.reply_text(
-        "Привет 👋\n\n"
+        f"Привет 👋 (v{BOT_VERSION})\n\n"
         "Я работаю по московскому времени (MSK).\n"
         "Я помогу:\n"
         "• следить за остатками лекарств 💊\n"
         "• напоминать о приеме по времени (по дням недели) ⏰\n"
         "• напоминать о покупке за 7 дней\n\n"
-        "Нажми «Начать», чтобы запустить меню 👇",
-        reply_markup=start_menu()
+        "Ваше меню управления — внизу экрана 👇",
+        reply_markup=main_menu() # Здесь теперь нижние кнопки
     )
 
 # ================== TEXT ==================
@@ -211,12 +212,64 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
 
+    # --- НОВЫЙ БЛОК: Распознавание нижних кнопок ---
+    if text == "➕ Добавить лекарство":
+        user_states[chat_id] = {"flow": "add", "step": "name", "data": {}}
+        await update.message.reply_text("Введите название лекарства:")
+        return
+    elif text == "▶️ Начать курс":
+        meds = data_store.get(chat_id, {})
+        not_started = [name for name, m in meds.items() if not m.get("is_started")]
+        if not not_started:
+            await update.message.reply_text("Нет лекарств для запуска или все курсы уже начаты.")
+            return
+        kb = [[InlineKeyboardButton(m, callback_data=f"start_now:{m}")] for m in not_started]
+        await update.message.reply_text("Выберите курс для старта:", reply_markup=InlineKeyboardMarkup(kb))
+        return
+    elif text == "🔄 Докуплено / Пополнить":
+        meds = list(data_store.get(chat_id, {}).keys())
+        if not meds:
+            await update.message.reply_text("Лекарств нет")
+            return
+        kb = [[InlineKeyboardButton(m, callback_data=f"refill:{m}")] for m in meds]
+        await update.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(kb))
+        return
+    elif text == "🔧 Изменить дозировку":
+        meds = list(data_store.get(chat_id, {}).keys())
+        if not meds:
+            await update.message.reply_text("Лекарств нет")
+            return
+        kb = [[InlineKeyboardButton(m, callback_data=f"dose:{m}")] for m in meds]
+        await update.message.reply_text("Выберите лекарство:", reply_markup=InlineKeyboardMarkup(kb))
+        return
+    elif text == "⏰ Напоминание (Дни/Время)":
+        meds = list(data_store.get(chat_id, {}).keys())
+        if not meds:
+            await update.message.reply_text("Лекарств нет")
+            return
+        kb = [[InlineKeyboardButton(m, callback_data=f"open_days:{m}")] for m in meds]
+        await update.message.reply_text("Выберите лекарство для настройки расписания:", reply_markup=InlineKeyboardMarkup(kb))
+        return
+    elif text == "📋 Мои курсы и прогноз":
+        await show_summary(update, context) # Вызываем вашу функцию сводки
+        return
+    elif text == "🗑 Удалить лекарство":
+        meds = list(data_store.get(chat_id, {}).keys())
+        if not meds:
+            await update.message.reply_text("Лекарств нет")
+            return
+        kb = [[InlineKeyboardButton(m, callback_data=f"delete:{m}")] for m in meds]
+        await update.message.reply_text("Выберите лекарство для удаления:", reply_markup=InlineKeyboardMarkup(kb))
+        return
+    # --- КОНЕЦ НОВОГО БЛОКА ---
+
+    # ДАЛЕЕ ВАШ ОРИГИНАЛЬНЫЙ КОД БЕЗ ИЗМЕНЕНИЙ
     state = user_states.get(chat_id)
     if not state:
         if chat_id not in started_users:
             await start(update, context)
         return
-
+    
     d = state["data"] if "data" in state else {}
 
     # ---------- ADD ----------
@@ -413,10 +466,11 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.job_queue.run_once(send_delayed_reminder, when=1200, data={'chat_id': chat_id, 'med_name': med_name})
         await query.edit_message_text(f"⏳ Напомню про «{med_name}» через 20 минут.")
 
-    elif data == "start_bot":
+    if data == "start_bot":
         started_users.add(chat_id)
-        # Замените строку ниже, чтобы увидеть версию в меню
-        await query.message.reply_text(f"Главное меню (v{BOT_VERSION}):", reply_markup=main_menu())
+        # Присылаем сообщение и включаем нижние кнопки
+        await query.message.reply_text("Главное меню открыто. Используйте кнопки внизу экрана 👇", reply_markup=main_menu())
+        return
 
     elif data == "main_menu":
         if chat_id in user_states:
@@ -607,10 +661,20 @@ async def save_medicine(update, chat_id):
 
 # ================== SUMMARY / FORECAST ==================
 
-async def show_summary(query):
-    meds = data_store.get(query.message.chat.id, {})
+async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = None):
+    # Определяем, откуда пришел вызов: из сообщения или из кнопки под сообщением
+    if hasattr(update_or_query, 'message') and update_or_query.message:
+        # Это обычное сообщение (нажата нижняя кнопка)
+        message = update_or_query.message
+        chat_id = message.chat.id
+    else:
+        # Это callback_query (нажата инлайн-кнопка)
+        message = update_or_query.callback_query.message
+        chat_id = message.chat.id
+
+    meds = data_store.get(chat_id, {})
     if not meds:
-        await query.message.reply_text("Список лекарств пуст.", reply_markup=main_menu())
+        await message.reply_text("Список лекарств пуст.", reply_markup=main_menu())
         return
 
     msg = "📋 Сводка и прогноз:\n\n"
@@ -634,22 +698,20 @@ async def show_summary(query):
 
         if med.get("course_days"):
             if med.get("is_started") and med.get("start_date"):
-                # Расчет даты окончания
                 end_date = med["start_date"] + timedelta(days=med["course_days"])
-                # Расчет оставшихся дней курса
+                date_str = end_date.strftime("%d.%m.%Y")
                 days_passed = (get_now() - med["start_date"]).days
                 remaining_days = max(0, med["course_days"] - days_passed)
                 
-                msg += f"Курс: еще {remaining_days} дн. (до {end_date.strftime('%d.%m.%Y')})\n"
-                
+                msg += f"Курс: еще {remaining_days} дн. (до {date_str})\n"
                 if days_left >= remaining_days:
-                    msg += "✅ На курс хватит\n" # Исправлено здесь
+                    msg += "✅ На курс хватит\n"
                 else:
                     msg += "⚠️ Нужно докупить таблетки!\n"
             else:
                 msg += f"Курс: {med['course_days']} дней (не начат)\n"
                 if days_left >= med["course_days"]:
-                    msg += "✅ На курс хватит\n" # Добавлено для единообразия
+                    msg += "✅ На курс хватит\n"
                 else:
                     msg += "⚠️ На весь курс не хватит\n"
         else:
@@ -657,7 +719,7 @@ async def show_summary(query):
         
         msg += "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
 
-    await query.message.reply_text(msg.strip(), reply_markup=main_menu())
+    await message.reply_text(msg.strip(), reply_markup=main_menu())
 
 # ================== REMINDER LOOP ==================
 
