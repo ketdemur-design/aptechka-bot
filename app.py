@@ -17,7 +17,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.9"  # Ваша версия
+BOT_VERSION = "1.1.10"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -509,6 +509,10 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if form == "drops":
             user_states[chat_id]["step"] = "unit_mg"
             await query.message.reply_text("Объем флакона (мл)?")
+        elif form in ("spray", "liquid"):
+            singular, _ = FORM_LABELS.get(form, ("единице", "единиц"))
+            user_states[chat_id]["step"] = "unit_mg"
+            await query.message.reply_text(f"Сколько мл в одной {singular}?")
         else:
             singular, _ = FORM_LABELS.get(form, ("единице", "единиц"))
             user_states[chat_id]["step"] = "unit_mg"
@@ -601,6 +605,8 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if med_data.get("form") == "drops":
                 await query.message.reply_text("Введите новую суточную дозировку (капель):")
+            elif med_data.get("form") in ("spray", "liquid"):
+                await query.message.reply_text("Введите новую суточную дозировку (мл):")
             else:
                 await query.message.reply_text("Введите новую суточную дозировку (мг):")
 
@@ -616,6 +622,8 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             if form == "drops":
                 await query.message.reply_text("Объем флакона (мл)?")
+            elif form in ("spray", "liquid"):
+                await query.message.reply_text("Сколько мл в одной единице?")
             else:
                 await query.message.reply_text("Сколько мг в одной единице?")
 
