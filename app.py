@@ -17,7 +17,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.5"  # Ваша версия
+BOT_VERSION = "1.1.6"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
