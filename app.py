@@ -16,7 +16,7 @@ from telegram.ext import (
 )
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.4"  # Ваша версия
+BOT_VERSION = "1.1.5"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -82,7 +82,8 @@ DAYS_MAP = {
 # ================== МЕНЮ ==================
 
 def start_menu():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Начать", callback_data="start_bot")]])
+    # Вместо "Начать" — "Запустить систему" или "Перезапустить"
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Перезапустить бота", callback_data="start_bot")]])
 
 from telegram import ReplyKeyboardMarkup # Добавьте этот импорт в начало, если его нет
 
@@ -120,7 +121,8 @@ def days_menu(med_name, times_dict=None):
         text = f"📅 {DAYS_MAP[key]}"
         if times_dict.get(key):
             text += f" ({', '.join(times_dict[key])})"
-        keyboard.append([InlineKeyboardButton(text, callback_data=f"set_day:{med_name}:{key}")])
+        keyboard.append([InlineKeyboardButton("🔙 Перезапустить бота", callback_data="main_menu")])
+    return InlineKeyboardMarkup(keyboard)
 
     # Одиночные дни
     for i in range(7):
@@ -467,15 +469,14 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"⏳ Напомню про «{med_name}» через 20 минут.")
 
     if data == "start_bot":
-        started_users.add(chat_id)
-        # Присылаем сообщение и включаем нижние кнопки
-        await query.message.reply_text("Главное меню открыто. Используйте кнопки внизу экрана 👇", reply_markup=main_menu())
+        await query.message.reply_text(f"Бот перезапущен (v{BOT_VERSION}). Главное меню:", reply_markup=main_menu())
         return
-
+        
     elif data == "main_menu":
         if chat_id in user_states:
             user_states.pop(chat_id)
-        await query.message.reply_text("Главное меню:", reply_markup=main_menu())
+        await query.message.reply_text("Возврат в главное меню:", reply_markup=main_menu())
+        return
 
     elif data == "add":
         user_states[chat_id] = {"flow": "add", "step": "name", "data": {}}
