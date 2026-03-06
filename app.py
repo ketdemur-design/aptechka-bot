@@ -14,6 +14,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 BOT_VERSION = "1.1.5"  # Ваша версия
@@ -778,6 +779,9 @@ async def reminder_loop(app):
         await asyncio.sleep(60)
 
 async def post_init(app):
+    await app.bot.set_my_commands([
+        BotCommand("start", "Перезапустить бота"),
+    ])
     app.create_task(reminder_loop(app))
 
 # ... здесь заканчивается функция reminder_loop или show_forecast ...
