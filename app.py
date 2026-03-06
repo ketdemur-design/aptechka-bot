@@ -17,7 +17,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.7"  # Ваша версия
+BOT_VERSION = "1.1.8"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -90,7 +90,7 @@ from telegram import ReplyKeyboardMarkup # Добавьте этот импор�
 
 def main_menu():
     return ReplyKeyboardMarkup([
-        ["➕ 🟢 Добавить лекарство", "▶️ 🟢 Начать курс"],
+        ["➕ Добавить лекарство", "▶️ Начать курс"],
         ["♻️ Докуплено / Пополнить", "🛠️ Изменить дозировку"],
         ["⏰ Напоминание (Дни/Время)"],
         ["📋 Мои курсы и прогноз"],
