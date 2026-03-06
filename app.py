@@ -17,7 +17,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.8"  # Ваша версия
+BOT_VERSION = "1.1.9"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -102,6 +102,7 @@ def form_menu():
         [InlineKeyboardButton("💊 Таблетки", callback_data="form_tablets")],
         [InlineKeyboardButton("💊 Капсулы", callback_data="form_capsules")],
         [InlineKeyboardButton("👁 Глазные капли", callback_data="form_drops")],
+        [InlineKeyboardButton("💨 Спрей", callback_data="form_spray")], # Добавлено
         [InlineKeyboardButton("📦 Саше", callback_data="form_sachet")],
         [InlineKeyboardButton("🧴 Жидкая форма", callback_data="form_liquid")],
     ])
@@ -136,12 +137,12 @@ def days_menu(med_name, times_dict=None):
     keyboard.append([InlineKeyboardButton("🔙 В меню", callback_data="main_menu")])
     return InlineKeyboardMarkup(keyboard)
 
-FORM_LABELS = {
-    "tablets": ("таблетке", "таблеток"),
+"tablets": ("таблетке", "таблеток"),
     "capsules": ("капсуле", "капсул"),
     "sachet": ("саше", "саше"),
     "liquid": ("бутылке", "бутылок"),
     "drops": ("флаконе", "флаконов"),
+    "spray": ("флаконе", "флаконов"), # Добавлено
 }
 
 # ================== HELPERS ==================
@@ -191,6 +192,10 @@ def get_display_units(med):
     form = med.get("form", "tablets")
     if form == "drops":
         return "мл", "капель"
+    if form == "spray":
+        return "мл", "впрыскиваний" # Добавлено
+    if form == "liquid":
+        return "мл", "мл" # Изменено с мг на мл
     return "мг", "мг"
 
 # ================== START ==================
@@ -291,9 +296,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif state["step"] == "units":
             d["units"] = int(float(text.replace(",", ".")))
             state["step"] = "daily_mg"
-            # Разный текст для капель и таблеток
-            if d.get("form") == "drops":
+            # Изменено: добавлена логика для спрея и жидкой формы
+            form = d.get("form")
+            if form == "drops":
                 await update.message.reply_text("Сколько капель в сутки назначено?")
+            elif form == "spray":
+                await update.message.reply_text("Сколько впрыскиваний в сутки назначено?")
+            elif form == "liquid":
+                await update.message.reply_text("Сколько мл в сутки назначено?")
             else:
                 await update.message.reply_text("Сколько мг в сутки принимаете?")
 
@@ -613,19 +623,22 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def save_medicine(update, chat_id):
     d = user_states[chat_id]["data"]
-    
     unit_size = d["unit_mg"] 
     units_count = d["units"]
+    form = d.get("form")
     
-    if d.get("form") == "drops":
-        # Переводим мл в капли (1 капля = 0.05 мл)
+    if form == "drops":
         total_resource = (unit_size / 0.05) * units_count
+    elif form == "spray":
+        # 1 впрыскивание = 0.1 мл. Считаем общий запас впрыскиваний.
+        total_resource = (unit_size / 0.1) * units_count
     else:
+        # Для таблеток и жидкой формы (мл) считаем общий объем ресурса напрямую
         total_resource = unit_size * units_count
 
     data_store.setdefault(chat_id, {})
     data_store[chat_id][d["name"]] = {
-        "form": d.get("form", "tablets"), 
+        "form": form, 
         "daily_mg": d["daily_mg"],       
         "unit_mg": d["unit_mg"],         
         "total_mg": total_resource,      
@@ -639,23 +652,16 @@ async def save_medicine(update, chat_id):
 
     med = data_store[chat_id][d["name"]]
     days = calc_days_left(med)
+    unit_label, dose_label = get_display_units(med)
     
-    if d.get("form") == "drops":
-        msg = (
-            f"✅ Лекарство добавлено (Глазные капли)\n\n"
-            f"Название: {d['name']}\n"
-            f"Объем флакона: {d['unit_mg']:g} мл\n"
-            f"Дозировка: {d['daily_mg']:g} капель/сутки\n"
-            f"Хватит на: {days} дней"
-        )
+    # Красивое сообщение при добавлении
+    msg = f"✅ Лекарство добавлено\n\nНазвание: {d['name']}\n"
+    if form in ["drops", "spray", "liquid"]:
+        msg += f"Объем флакона/ед: {d['unit_mg']:g} мл\n"
     else:
-        msg = (
-            f"✅ Лекарство добавлено\n\n"
-            f"Название: {d['name']}\n"
-            f"Дозировка: {d['unit_mg']:g} мг\n"
-            f"Хватит на: {days} дней"
-        )
-
+        msg += f"Дозировка ед: {d['unit_mg']:g} мг\n"
+    
+    msg += f"Расход: {d['daily_mg']:g} {dose_label}/сутки\nХватит на: {days} дней"
     msg += "\n\n⚠️ Нажмите «▶️ Начать курс» для старта отсчета."
 
     await update.message.reply_text(msg, reply_markup=main_menu())
@@ -687,13 +693,16 @@ async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = Non
         if not isinstance(med.get("times"), dict): med["times"] = {}
         schedule_text = format_schedule(med.get("times", {}))
         
+        # Получаем правильные единицы (мл или мг)
         unit_label, dose_label = get_display_units(med)
 
         msg += f"💊 Название: {name} ({status})\n"
-        if med.get("form") == "drops":
-            msg += f"Объем флакона: {med['unit_mg']:g} {unit_label}\n"
+        
+        # Исправлено: отображаем мл для капель, спрея и жидкой формы
+        if med.get("form") in ["drops", "spray", "liquid"]:
+            msg += f"Объем ед: {med['unit_mg']:g} мл\n"
         else:
-            msg += f"Дозировка: {med['unit_mg']:g} {unit_label}\n"
+            msg += f"Дозировка ед: {med['unit_mg']:g} мг\n"
             
         msg += f"Время приема:\n{schedule_text}\n"
         msg += f"Хватит на: {days_left} дней при расходе {med['daily_mg']:g} {dose_label}/сутки\n"
@@ -709,7 +718,7 @@ async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = Non
                 if days_left >= remaining_days:
                     msg += "✅ На курс хватит\n"
                 else:
-                    msg += "⚠️ Нужно докупить таблетки!\n"
+                    msg += "⚠️ Нужно докупить!\n"
             else:
                 msg += f"Курс: {med['course_days']} дней (не начат)\n"
                 if days_left >= med["course_days"]:
@@ -745,16 +754,16 @@ async def reminder_loop(app):
                             times_for_today = m["times"][current_weekday]
                             
                         if current_time_str in times_for_today:
-                            dose_text = f"{m['daily_mg']:g}"
-                            if m.get("form") == "drops":
-                                dose_text += " капель"
-                            else:
-                                dose_text += " мг"
+                            unit_label, dose_label = get_display_units(m)
+                            dose_val = m['daily_mg']
+                            
+                            # Формируем текст дозировки динамически
+                            dose_text = f"{dose_val:g} {dose_label}"
 
                             await app.bot.send_message(
                                 chat_id,
                                 f"⏰ Время принимать лекарство: {name}\n"
-                                f"Дозировка (суточная): {dose_text}"
+                                f"Дозировка: {dose_text}"
                             )
 
                     # 2. Остатки (09:00)
