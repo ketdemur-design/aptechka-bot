@@ -632,7 +632,7 @@ async def show_summary(query):
         msg += f"Время приема:\n{schedule_text}\n"
         msg += f"Хватит на: {days_left} дней при расходе {med['daily_mg']:g} {dose_label}/сутки\n"
 
-       if med.get("course_days"):
+        if med.get("course_days"):
             if med.get("is_started") and med.get("start_date"):
                 # Расчет даты окончания
                 end_date = med["start_date"] + timedelta(days=med["course_days"])
