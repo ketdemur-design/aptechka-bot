@@ -15,7 +15,7 @@ from telegram.ext import (
 )
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.2"  # Ваша версия
+BOT_VERSION = "1.1.3"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -90,7 +90,7 @@ def main_menu():
         [InlineKeyboardButton("🔄 Докуплено / Пополнить", callback_data="refill")],
         [InlineKeyboardButton("🔧 Изменить дозировку", callback_data="dose")],
         [InlineKeyboardButton("⏰ Напоминание (Дни/Время)", callback_data="reminder_menu")],
-        [InlineKeyboardButton("📋 Мои курсы и прогноз", callback_data="meds_info")], # Объединенная кнопка
+        [InlineKeyboardButton("📋 Мои курсы и прогноз", callback_data="meds_info")], # callback_data="meds_info"
         [InlineKeyboardButton("🗑 Удалить лекарство", callback_data="delete")],
     ])
 
@@ -400,6 +400,10 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = query.message.chat.id
     data = query.data
 
+    if data == "meds_info":
+        await show_summary(query)
+        return
+
     if data.startswith("taken:"):
         med_name = data.split(":")[1]
         await query.edit_message_text(f"✅ Прием «{med_name}» отмечен. Молодец!")
@@ -619,8 +623,7 @@ async def show_summary(query):
         
         unit_label, dose_label = get_display_units(med)
 
-        # Секция базовой информации
-        msg += f"Название: {name} ({status})\n"
+        msg += f"💊 Название: {name} ({status})\n"
         if med.get("form") == "drops":
             msg += f"Объем флакона: {med['unit_mg']:g} {unit_label}\n"
         else:
@@ -629,28 +632,26 @@ async def show_summary(query):
         msg += f"Время приема:\n{schedule_text}\n"
         msg += f"Хватит на: {days_left} дней при расходе {med['daily_mg']:g} {dose_label}/сутки\n"
 
-        # Секция прогноза по курсу
-        if med["course_days"]:
+       if med.get("course_days"):
             if med.get("is_started") and med.get("start_date"):
-                course_end_date = med["start_date"] + timedelta(days=med["course_days"])
-                date_str = course_end_date.strftime("%d.%m.%Y")
-                
-                # Считаем, сколько дней курса осталось пройти
+                # Расчет даты окончания
+                end_date = med["start_date"] + timedelta(days=med["course_days"])
+                # Расчет оставшихся дней курса
                 days_passed = (get_now() - med["start_date"]).days
-                remaining_course_days = med["course_days"] - days_passed
+                remaining_days = max(0, med["course_days"] - days_passed)
                 
-                msg += f"Длительность курса: {med['course_days']} дней (до {date_str})\n"
+                msg += f"Курс: еще {remaining_days} дн. (до {end_date.strftime('%d.%m.%Y')})\n"
                 
-                if days_left >= remaining_course_days:
-                    msg += "✅ На курс хватит, докупать не нужно\n"
+                if days_left >= remaining_days:
+                    msg += "✅ На остаток курса хватит\n"
                 else:
-                    msg += "⚠️ На курс не хватит, нужно докупить\n"
+                    msg += "⚠️ Нужно докупить таблетки!\n"
             else:
-                msg += f"Длительность курса: {med['course_days']} дней (курс не начат)\n"
+                msg += f"Курс: {med['course_days']} дней (не начат)\n"
                 if days_left < med["course_days"]:
                     msg += "⚠️ На весь курс не хватит\n"
         else:
-            msg += "♾ Приём без ограничения срока\n"
+            msg += "♾ Приём: бессрочно\n"
         
         msg += "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
 
