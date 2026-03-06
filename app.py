@@ -90,8 +90,7 @@ def main_menu():
         [InlineKeyboardButton("🔄 Докуплено / Пополнить", callback_data="refill")],
         [InlineKeyboardButton("🔧 Изменить дозировку", callback_data="dose")],
         [InlineKeyboardButton("⏰ Напоминание (Дни/Время)", callback_data="reminder_menu")],
-        [InlineKeyboardButton("📋 Сводка", callback_data="summary")],
-        [InlineKeyboardButton("⏳ Прогноз", callback_data="forecast")],
+        [InlineKeyboardButton("📋 Мои курсы и прогноз", callback_data="meds_info")], # Объединенная кнопка
         [InlineKeyboardButton("🗑 Удалить лекарство", callback_data="delete")],
     ])
 
@@ -546,11 +545,9 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data_store[chat_id].pop(med)
             await query.message.reply_text("🗑 Лекарство удалено", reply_markup=main_menu())
 
-    elif data == "summary":
-        await show_summary(query)
-
-    elif data == "forecast":
-        await show_forecast(query)
+    # Внутри функции buttons найдите обработку этих callback_data:
+    elif data == "meds_info":
+        await show_meds_info(query)
 
 # ================== SAVE ==================
 
@@ -612,9 +609,9 @@ async def show_summary(query):
         await query.message.reply_text("Список лекарств пуст.", reply_markup=main_menu())
         return
 
-    msg = "📋 Сводка:\n\n"
+    msg = "📋 Сводка и прогноз:\n\n"
     for name, med in meds.items():
-        days = calc_days_left(med)
+        days_left = calc_days_left(med)
         status = "▶️ Идет прием" if med.get("is_started") else "⏸ Ожидание старта"
         
         if not isinstance(med.get("times"), dict): med["times"] = {}
@@ -622,6 +619,7 @@ async def show_summary(query):
         
         unit_label, dose_label = get_display_units(med)
 
+        # Секция базовой информации
         msg += f"Название: {name} ({status})\n"
         if med.get("form") == "drops":
             msg += f"Объем флакона: {med['unit_mg']:g} {unit_label}\n"
@@ -629,51 +627,32 @@ async def show_summary(query):
             msg += f"Дозировка: {med['unit_mg']:g} {unit_label}\n"
             
         msg += f"Время приема:\n{schedule_text}\n"
-        msg += f"Хватит на: {days} дней при расходе {med['daily_mg']:g} {dose_label}/сутки\n"
+        msg += f"Хватит на: {days_left} дней при расходе {med['daily_mg']:g} {dose_label}/сутки\n"
 
-        if med["course_days"]:
-            msg += f"Длительность курса: {med['course_days']} дней\n"
-        
-        msg += "\n"
-
-    await query.message.reply_text(msg.strip(), reply_markup=main_menu())
-
-async def show_forecast(query):
-    meds = data_store.get(query.message.chat.id, {})
-    if not meds:
-        await query.message.reply_text("Список лекарств пуст.", reply_markup=main_menu())
-        return
-
-    msg = "⏳ Прогноз:\n\n"
-
-    for name, med in meds.items():
-        days_left = calc_days_left(med)
-        unit_label, _ = get_display_units(med)
-        
-        msg += f"Название: {name}\n"
-        if med.get("form") == "drops":
-            msg += f"Объем: {med['unit_mg']:g} {unit_label}\n"
-        else:
-            msg += f"Дозировка: {med['unit_mg']:g} {unit_label}\n"
-            
-        msg += f"Хватит на: {days_left} дней\n"
-
+        # Секция прогноза по курсу
         if med["course_days"]:
             if med.get("is_started") and med.get("start_date"):
                 course_end_date = med["start_date"] + timedelta(days=med["course_days"])
                 date_str = course_end_date.strftime("%d.%m.%Y")
-                msg += f"Длительность курса: {med['course_days']} дней до {date_str}\n"
+                
+                # Считаем, сколько дней курса осталось пройти
+                days_passed = (get_now() - med["start_date"]).days
+                remaining_course_days = med["course_days"] - days_passed
+                
+                msg += f"Длительность курса: {med['course_days']} дней (до {date_str})\n"
+                
+                if days_left >= remaining_course_days:
+                    msg += "✅ На курс хватит, докупать не нужно\n"
+                else:
+                    msg += "⚠️ На курс не хватит, нужно докупить\n"
             else:
                 msg += f"Длительность курса: {med['course_days']} дней (курс не начат)\n"
-
-            if days_left >= med["course_days"]:
-                msg += "✅ На курс хватит, докупать не нужно\n"
-            else:
-                msg += "⚠️ На курс не хватит, нужно докупить\n"
+                if days_left < med["course_days"]:
+                    msg += "⚠️ На весь курс не хватит\n"
         else:
             msg += "♾ Приём без ограничения срока\n"
-
-        msg += "\n"
+        
+        msg += "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
 
     await query.message.reply_text(msg.strip(), reply_markup=main_menu())
 
