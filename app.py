@@ -1,7 +1,9 @@
 import os 
 import asyncio
 import re
+import json
 from datetime import datetime, timedelta
+from pathlib import Path
 import pytz
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove # Добавьте это к остальным импортам
 
@@ -17,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.10"  # Ваша версия
+BOT_VERSION = "1.1.11"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -70,6 +72,59 @@ if not BOT_TOKEN:
 data_store = {}
 user_states = {}
 started_users = set()
+DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
+
+
+def _serialize_med(med):
+    payload = dict(med)
+    for dt_key in ("created", "start_date"):
+        if isinstance(payload.get(dt_key), datetime):
+            payload[dt_key] = payload[dt_key].isoformat()
+    return payload
+
+
+def _deserialize_med(med):
+    payload = dict(med)
+    for dt_key in ("created", "start_date"):
+        value = payload.get(dt_key)
+        if isinstance(value, str):
+            try:
+                parsed = datetime.fromisoformat(value)
+                if parsed.tzinfo is None:
+                    parsed = TZ_MOSCOW.localize(parsed)
+                payload[dt_key] = parsed.astimezone(TZ_MOSCOW)
+            except ValueError:
+                payload[dt_key] = None
+    payload.setdefault("times", {})
+    payload.setdefault("notified", False)
+    payload.setdefault("is_started", False)
+    return payload
+
+
+def save_data_store():
+    serializable = {
+        str(chat_id): {name: _serialize_med(med) for name, med in meds.items()}
+        for chat_id, meds in data_store.items()
+    }
+    DATA_FILE.write_text(json.dumps(serializable, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def load_data_store():
+    if not DATA_FILE.exists():
+        return
+    try:
+        raw = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Не удалось загрузить данные: {e}")
+        return
+
+    data_store.clear()
+    for chat_id, meds in raw.items():
+        try:
+            chat_key = int(chat_id)
+        except (TypeError, ValueError):
+            continue
+        data_store[chat_key] = {name: _deserialize_med(med) for name, med in meds.items()}
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -366,6 +421,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 status_msg = f"✅ Сохранено: {DAYS_MAP.get(day_key, day_key)} — {', '.join(times)}"
 
             times_dict = med_data["times"]
+            save_data_store()
             user_states.pop(chat_id)
 
             await update.message.reply_text(
@@ -384,7 +440,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         med = data_store[chat_id][state["medicine"]]
         med["daily_mg"] = float(text.replace(",", "."))
         med["notified"] = False
-
+        save_data_store()
+        
         days = calc_days_left(med)
         unit_label, dose_label = get_display_units(med)
         dosage = med["unit_mg"]
@@ -417,12 +474,16 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if med.get("form") == "drops":
                 # Переводим мл в капли
                 added_resource = (new_unit_size / 0.05) * units
+            elif med.get("form") == "spray":
+                # Переводим мл в впрыскивания
+                added_resource = (new_unit_size / 0.1) * units
             else:
                 # Обычный расчет
                 added_resource = new_unit_size * units
 
             med["total_mg"] += added_resource
             med["notified"] = False
+            save_data_store()
 
             days = calc_days_left(med)
             unit_label, dose_label = get_display_units(med)
@@ -548,6 +609,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         med["is_started"] = True
         med["start_date"] = get_now()
+        save_data_store()
         
         await query.message.reply_text(f"▶️ Курс «{med_name}» начат!\nОбратный отсчет запущен.", reply_markup=main_menu())
 
@@ -629,6 +691,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif action == "delete":
             data_store[chat_id].pop(med)
+            save_data_store()
             await query.message.reply_text("🗑 Лекарство удалено", reply_markup=main_menu())
 
     # Внутри функции buttons найдите обработку этих callback_data:
@@ -680,6 +743,7 @@ async def save_medicine(update, chat_id):
     msg += f"Расход: {d['daily_mg']:g} {dose_label}/сутки\nХватит на: {days} дней"
     msg += "\n\n⚠️ Нажмите «▶️ Начать курс» для старта отсчета."
 
+    save_data_store()
     await update.message.reply_text(msg, reply_markup=main_menu())
     user_states.pop(chat_id)
 
@@ -769,9 +833,13 @@ async def reminder_loop(app):
                         elif current_weekday in m["times"]:
                             times_for_today = m["times"][current_weekday]
                             
-                        if current_time_str in times_for_today:
+                        iif current_time_str in times_for_today:
+                            last_reminder_at = m.get("last_reminder_at")
+                            reminder_key = f"{now_msk.date().isoformat()} {current_time_str}"
+                            if last_reminder_at == reminder_key:
+                                continue
+
                             unit_label, dose_label = get_display_units(m)
-                            dose_val = m['daily_mg']
                             
                             # Формируем текст дозировки динамически
                             dose_text = f"{dose_val:g} {dose_label}"
@@ -781,6 +849,8 @@ async def reminder_loop(app):
                                 f"⏰ Время принимать лекарство: {name}\n"
                                 f"Дозировка: {dose_text}"
                             )
+                            m["last_reminder_at"] = reminder_key
+                            save_data_store()
 
                     # 2. Остатки (09:00)
                     if now_msk.hour == 9 and now_msk.minute == 0:
@@ -797,6 +867,9 @@ async def reminder_loop(app):
                     
                     if now_msk.hour == 0 and now_msk.minute == 0:
                         m["notified"] = False
+                        if m.get("last_reminder_at") and not str(m.get("last_reminder_at", "")).startswith(now_msk.date().isoformat()):
+                            m["last_reminder_at"] = None
+                        save_data_store()
 
         except Exception as e:
             print(f"Error in loop: {e}")
@@ -827,6 +900,7 @@ async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
 
 # Вот ваша существующая функция main, она остается в самом низу
 def main():
+    load_data_store()
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     # ... и так далее
 
