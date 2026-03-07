@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.17"  # Ваша версия
+BOT_VERSION = "1.1.18"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -842,47 +842,42 @@ async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = Non
 # ================== REMINDER LOOP ==================
 
 async def reminder_loop(app):
+    print("Фоновый цикл напоминаний запущен!")
     while True:
         try:
             now_msk = get_now()
             current_time_str = now_msk.strftime("%H:%M")
             current_weekday = str(now_msk.weekday()) 
-            is_weekend = now_msk.weekday() >= 5 # Суббота (5) или Воскресенье (6)
+            is_weekend = now_msk.weekday() >= 5 # 5 - Сб, 6 - Вс
 
+            # Проходим по всем пользователям и их лекарствам
             for chat_id, meds in data_store.items():
                 for name, m in meds.items():
-                    if not isinstance(m.get("times"), dict) or not m.get("is_started"): 
+                    # ВАЖНО: Напоминание сработает только если курс НАЧАТ
+                    if not m.get("is_started"):
                         continue
 
-                    # --- ИСПРАВЛЕННЫЙ БЛОК: Сбор всех времен на сегодня ---
+                    # Собираем все запланированные времена на сегодня
+                    t_dict = m.get("times", {})
                     times_to_check = []
-                    t_dict = m["times"]
                     
-                    if "Everyday" in t_dict: 
-                        times_to_check.extend(t_dict["Everyday"])
+                    if "Everyday" in t_dict: times_to_check.extend(t_dict["Everyday"])
+                    if is_weekend and "Weekends" in t_dict: times_to_check.extend(t_dict["Weekends"])
+                    if not is_weekend and "Weekdays" in t_dict: times_to_check.extend(t_dict["Weekdays"])
+                    if current_weekday in t_dict: times_to_check.extend(t_dict[current_weekday])
                     
-                    if is_weekend and "Weekends" in t_dict: 
-                        times_to_check.extend(t_dict["Weekends"])
-                    
-                    if not is_weekend and "Weekdays" in t_dict: 
-                        times_to_check.extend(t_dict["Weekdays"])
-                    
-                    if current_weekday in t_dict: 
-                        times_to_check.extend(t_dict[current_weekday])
-                    
-                    # Убираем дубликаты (если время совпало в разных папках)
+                    # Уникальный список времени на сегодня
                     times_for_today = set(times_to_check)
-                    # -----------------------------------------------------
-                            
+
                     if current_time_str in times_for_today:
-                        # Уникальный ключ для этой минуты, чтобы не слать 2 раза
+                        # Защита от повторной отправки в ту же минуту
                         reminder_key = f"{now_msk.date().isoformat()}:{current_time_str}"
                         if m.get("last_reminder_key") == reminder_key:
                             continue
 
                         unit_label, dose_label = get_display_units(m)
                         
-                        # Расчет разовой дозы
+                        # Расчет дозы (делим суточную на кол-во приемов сегодня)
                         doses_count = len(times_for_today)
                         per_dose = m['daily_mg'] / doses_count if doses_count > 0 else m['daily_mg']
                         
@@ -897,28 +892,30 @@ async def reminder_loop(app):
                             f"Дозировка: {per_dose:g} {dose_label}",
                             reply_markup=keyboard
                         )
-                        # Запоминаем, что на эту минуту уже отправили
+                        # Помечаем, что отправили, и сохраняем
                         m["last_reminder_key"] = reminder_key
+                        save_data_store()
 
-                    # Проверка остатков в 09:00
+                    # Проверка остатков (в 09:00 по МСК)
                     if now_msk.hour == 9 and now_msk.minute == 0:
-                        rem_key_9am = f"{now_msk.date().isoformat()}:09:00"
-                        # Чтобы не спамить в течение минуты (т.к. цикл 30 сек)
-                        if m.get("last_9am_key") != rem_key_9am:
+                        r_key_9am = f"{now_msk.date().isoformat()}:09am"
+                        if m.get("last_9am_key") != r_key_9am:
                             if not m.get("notified"):
                                 days = calc_days_left(m)
                                 if 0 < days <= 7:
                                     await app.bot.send_message(chat_id, f"🛒 Заканчивается {name}\nХватит на: {days} дн.\nПора купить 💊")
                                     m["notified"] = True
-                            m["last_9am_key"] = rem_key_9am
+                            m["last_9am_key"] = r_key_9am
+                            save_data_store()
                     
+                    # Сброс флага уведомления в полночь
                     if now_msk.hour == 0 and now_msk.minute == 0:
                         m["notified"] = False
 
         except Exception as e:
-            print(f"Error in loop: {e}")
+            print(f"Ошибка в цикле напоминаний: {e}")
         
-        # Спим 30 секунд для точности
+        # Проверка каждые 30 секунд
         await asyncio.sleep(30)
 
 async def post_init(app):
@@ -945,22 +942,26 @@ async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
 
 # Вот ваша существующая функция main, она остается в самом низу
 def main():
-    # 1. Сначала загружаем данные из файла
+    # 1. Загружаем сохраненные лекарства
     load_data_store()
     
     # 2. Создаем приложение
+    if not BOT_TOKEN: raise RuntimeError("BOT_TOKEN не найден")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     
-    # 3. Настраиваем инициализацию (команды и цикл напоминаний)
+    # 3. Привязываем команды и цикл напоминаний
     app.post_init = post_init
     
-    # 4. Регистрируем обработчики
+    # 4. Обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
-    # 5. Запуск
-    print("Бот запущен...")
+    # 5. Пуск
+    print(f"Бот v{BOT_VERSION} запущен...")
     app.run_polling()
+
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
