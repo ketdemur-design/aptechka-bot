@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.15"  # Ваша версия
+BOT_VERSION = "1.1.16"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -98,6 +98,7 @@ def _deserialize_med(med):
     payload.setdefault("times", {})
     payload.setdefault("notified", False)
     payload.setdefault("is_started", False)
+    payload.setdefault("last_reminder_key", None)
     return payload
 
 
@@ -845,6 +846,7 @@ async def reminder_loop(app):
         try:
             now_msk = get_now()
             current_time_str = now_msk.strftime("%H:%M")
+            previous_time_str = (now_msk - timedelta(minutes=1)).strftime("%H:%M")
             current_weekday = str(now_msk.weekday()) 
             is_weekend = now_msk.weekday() >= 5 # Суббота или Воскресенье
 
@@ -864,7 +866,18 @@ async def reminder_loop(app):
                     elif current_weekday in m["times"]:
                         times_for_today = m["times"][current_weekday]
                             
+                    scheduled_time = None
                     if current_time_str in times_for_today:
+                        scheduled_time = current_time_str
+                    elif previous_time_str in times_for_today:
+                        # Страховка на случай, если цикл сработал чуть позже минуты напоминания.
+                        scheduled_time = previous_time_str
+
+                    if scheduled_time:
+                        reminder_key = f"{now_msk.date().isoformat()}:{scheduled_time}"
+                        if m.get("last_reminder_key") == reminder_key:
+                            continue
+
                         unit_label, dose_label = get_display_units(m)
                         
                         # Рассчитываем разовую дозу для сообщения
@@ -882,6 +895,7 @@ async def reminder_loop(app):
                             f"Дозировка: {per_dose:g} {dose_label}",
                             reply_markup=keyboard
                         )
+                        m["last_reminder_key"] = reminder_key
 
                     # Проверка остатков (в 09:00)
                     if now_msk.hour == 9 and now_msk.minute == 0:
@@ -897,7 +911,7 @@ async def reminder_loop(app):
         except Exception as e:
             print(f"Error in loop: {e}")
         
-        await asyncio.sleep(60)
+        await asyncio.sleep(30)
 
 async def post_init(app):
     await app.bot.set_my_commands([
