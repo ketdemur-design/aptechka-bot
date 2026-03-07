@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.14"  # Ваша версия
+BOT_VERSION = "1.1.15"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -206,6 +206,9 @@ def get_now():
     return datetime.now(TZ_MOSCOW)
 
 def calc_days_left(med):
+    # Защита от деления на ноль, если дозировка не указана
+    if not med.get("daily_mg") or med["daily_mg"] <= 0:
+        return 0
     capacity_days = int(med["total_mg"] // med["daily_mg"])
     if not med.get("is_started") or not med.get("start_date"):
         return capacity_days
@@ -213,7 +216,7 @@ def calc_days_left(med):
     now_dt = get_now()
     days_passed = (now_dt - start_dt).days
     left = capacity_days - days_passed
-    return left
+    return max(0, left) # Чтобы не уходило в минус
 
 def parse_times(text):
     clean_text = text.replace(",", " ").replace(";", " ").replace(".", ":").replace("\n", " ")
@@ -920,17 +923,22 @@ async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
 
 # Вот ваша существующая функция main, она остается в самом низу
 def main():
+    # 1. Сначала загружаем данные из файла
     load_data_store()
+    
+    # 2. Создаем приложение
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    # ... и так далее
-
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # 3. Настраиваем инициализацию (команды и цикл напоминаний)
     app.post_init = post_init
+    
+    # 4. Регистрируем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    
+    # 5. Запуск
+    print("Бот запущен...")
     app.run_polling()
-
 if __name__ == "__main__":
     main()
