@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.12"  # Ваша версия
+BOT_VERSION = "1.1.13"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -776,25 +776,39 @@ async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = Non
         return
 
     msg = "📋 Сводка и прогноз:\n\n"
+    # Внутри функции show_summary замените цикл:
     for name, med in meds.items():
         days_left = calc_days_left(med)
         status = "▶️ Идет прием" if med.get("is_started") else "⏸ Ожидание старта"
         
         if not isinstance(med.get("times"), dict): med["times"] = {}
         schedule_text = format_schedule(med.get("times", {}))
-        
-        # Получаем правильные единицы (мл или мг)
         unit_label, dose_label = get_display_units(med)
 
         msg += f"💊 Название: {name} ({status})\n"
         
-        # Исправлено: отображаем мл для капель, спрея и жидкой формы
         if med.get("form") in ["drops", "spray", "liquid"]:
-            msg += f"Объем ед: {med['unit_mg']:g} мл\n"
+            msg += f"Дозировка ед: {med['unit_mg']:g} мл\n"
         else:
             msg += f"Дозировка ед: {med['unit_mg']:g} мг\n"
             
         msg += f"Время приема:\n{schedule_text}\n"
+
+        # --- НОВАЯ СТРОКА: Количество приема ---
+        times_dict = med.get("times", {})
+        doses_count = 0
+        if "Everyday" in times_dict and times_dict["Everyday"]:
+            doses_count = len(times_dict["Everyday"])
+        elif "Weekdays" in times_dict and times_dict["Weekdays"]:
+            doses_count = len(times_dict["Weekdays"])
+        elif str(get_now().weekday()) in times_dict:
+            doses_count = len(times_dict[str(get_now().weekday())])
+        
+        if doses_count > 0:
+            per_dose = med["daily_mg"] / doses_count
+            msg += f"Количество приема: {doses_count} раза в день по {per_dose:g} {dose_label}\n"
+        # ---------------------------------------
+
         msg += f"Хватит на: {days_left} дней при расходе {med['daily_mg']:g} {dose_label}/сутки\n"
 
         if med.get("course_days"):
@@ -830,57 +844,42 @@ async def reminder_loop(app):
             now_msk = get_now()
             current_time_str = now_msk.strftime("%H:%M")
             current_weekday = str(now_msk.weekday()) 
-            
+            is_weekend = now_msk.weekday() >= 5 # Суббота или Воскресенье
+
             for chat_id, meds in data_store.items():
                 for name, m in meds.items():
-                    if not isinstance(m.get("times"), dict): continue
+                    if not isinstance(m.get("times"), dict) or not m.get("is_started"): 
+                        continue
 
-                    # 1. Время приема
-                    if m.get("is_started") and m.get("times"):
-                        times_for_today = []
-                        if "Everyday" in m["times"]:
-                            times_for_today = m["times"]["Everyday"]
-                        elif current_weekday in m["times"]:
-                            times_for_today = m["times"][current_weekday]
+                    # Определяем список времени на сегодня
+                    times_for_today = []
+                    if "Everyday" in m["times"]:
+                        times_for_today = m["times"]["Everyday"]
+                    elif is_weekend and "Weekends" in m["times"]:
+                        times_for_today = m["times"]["Weekends"]
+                    elif not is_weekend and "Weekdays" in m["times"]:
+                        times_for_today = m["times"]["Weekdays"]
+                    elif current_weekday in m["times"]:
+                        times_for_today = m["times"][current_weekday]
                             
-                        if current_time_str in times_for_today:
-                            last_reminder_at = m.get("last_reminder_at")
-                            reminder_key = f"{now_msk.date().isoformat()} {current_time_str}"
-                            if last_reminder_at == reminder_key:
-                                continue
+                    if current_time_str in times_for_today:
+                        unit_label, dose_label = get_display_units(m)
+                        
+                        # Расчет разовой дозы
+                        doses_count = len(times_for_today)
+                        per_dose = m['daily_mg'] / doses_count if doses_count > 0 else m['daily_mg']
+                        
+                        keyboard = InlineKeyboardMarkup([
+                            [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{name}")],
+                            [InlineKeyboardButton("⏰ Через 20 мин", callback_data=f"later:{name}")]
+                        ])
 
-                            _, dose_label = get_display_units(m)
-                            dose_val = m.get("daily_mg", 0)
-                            
-                            # Формируем текст дозировки динамически
-                            dose_text = f"{dose_val:g} {dose_label}"
-
-                            await app.bot.send_message(
-                                chat_id,
-                                f"⏰ Время принимать лекарство: {name}\n"
-                                f"Дозировка: {dose_text}"
-                            )
-                            m["last_reminder_at"] = reminder_key
-                            save_data_store()
-
-                    # 2. Остатки (09:00)
-                    if now_msk.hour == 9 and now_msk.minute == 0:
-                        if not m["notified"]:
-                            days = calc_days_left(m)
-                            if 0 < days <= 7:
-                                await app.bot.send_message(
-                                    chat_id,
-                                    f"🛒 Заканчивается {name}\n"
-                                    f"Хватит на: {days} дней\n"
-                                    f"Пора купить 💊"
-                                )
-                                m["notified"] = True 
-                    
-                    if now_msk.hour == 0 and now_msk.minute == 0:
-                        m["notified"] = False
-                        if m.get("last_reminder_at") and not str(m.get("last_reminder_at", "")).startswith(now_msk.date().isoformat()):
-                            m["last_reminder_at"] = None
-                        save_data_store()
+                        await app.bot.send_message(
+                            chat_id,
+                            f"⏰ Время принимать лекарство: {name}\n"
+                            f"Дозировка: {per_dose:g} {dose_label}",
+                            reply_markup=keyboard
+                        )
 
         except Exception as e:
             print(f"Error in loop: {e}")
