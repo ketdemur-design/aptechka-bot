@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.13"  # Ваша версия
+BOT_VERSION = "1.1.14"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -794,19 +794,18 @@ async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = Non
             
         msg += f"Время приема:\n{schedule_text}\n"
 
-        # --- НОВАЯ СТРОКА: Количество приема ---
+        # --- НОВЫЙ ПУНКТ: Количество приема ---
         times_dict = med.get("times", {})
-        doses_count = 0
-        if "Everyday" in times_dict and times_dict["Everyday"]:
-            doses_count = len(times_dict["Everyday"])
-        elif "Weekdays" in times_dict and times_dict["Weekdays"]:
-            doses_count = len(times_dict["Weekdays"])
-        elif str(get_now().weekday()) in times_dict:
-            doses_count = len(times_dict[str(get_now().weekday())])
+        # Ищем любое заполненное расписание для примера (Каждый день -> Будни -> Выходные)
+        sample_key = None
+        if times_dict.get("Everyday"): sample_key = "Everyday"
+        elif times_dict.get("Weekdays"): sample_key = "Weekdays"
+        elif times_dict.get("Weekends"): sample_key = "Weekends"
         
-        if doses_count > 0:
-            per_dose = med["daily_mg"] / doses_count
-            msg += f"Количество приема: {doses_count} раза в день по {per_dose:g} {dose_label}\n"
+        if sample_key:
+            cnt = len(times_dict[sample_key])
+            per_dose = med["daily_mg"] / cnt
+            msg += f"Количество приема: {cnt} раза в день по {per_dose:g} {dose_label}\n"
         # ---------------------------------------
 
         msg += f"Хватит на: {days_left} дней при расходе {med['daily_mg']:g} {dose_label}/сутки\n"
@@ -851,7 +850,7 @@ async def reminder_loop(app):
                     if not isinstance(m.get("times"), dict) or not m.get("is_started"): 
                         continue
 
-                    # Определяем список времени на сегодня
+                    # Проверяем все возможные папки расписания
                     times_for_today = []
                     if "Everyday" in m["times"]:
                         times_for_today = m["times"]["Everyday"]
@@ -865,7 +864,7 @@ async def reminder_loop(app):
                     if current_time_str in times_for_today:
                         unit_label, dose_label = get_display_units(m)
                         
-                        # Расчет разовой дозы
+                        # Рассчитываем разовую дозу для сообщения
                         doses_count = len(times_for_today)
                         per_dose = m['daily_mg'] / doses_count if doses_count > 0 else m['daily_mg']
                         
@@ -880,6 +879,17 @@ async def reminder_loop(app):
                             f"Дозировка: {per_dose:g} {dose_label}",
                             reply_markup=keyboard
                         )
+
+                    # Проверка остатков (в 09:00)
+                    if now_msk.hour == 9 and now_msk.minute == 0:
+                        if not m.get("notified"):
+                            days = calc_days_left(m)
+                            if 0 < days <= 7:
+                                await app.bot.send_message(chat_id, f"🛒 Заканчивается {name}\nХватит на: {days} дн.\nПора купить 💊")
+                                m["notified"] = True 
+                    
+                    if now_msk.hour == 0 and now_msk.minute == 0:
+                        m["notified"] = False
 
         except Exception as e:
             print(f"Error in loop: {e}")
