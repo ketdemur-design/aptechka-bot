@@ -274,7 +274,15 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
 
-    if text.lower() in {"старт", "начать", "start", "/start", "🚀 старт"}:
+    if text.lower() in {
+        "старт",
+        "начать",
+        "start",
+        "/start",
+        "🚀 старт",
+        "меню старт",
+        "старт меню",
+    }:
         started_users.add(chat_id)
         user_states.pop(chat_id, None)
         await update.message.reply_text(
@@ -549,6 +557,8 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"⏳ Напомню про «{med_name}» через 20 минут.")
 
     if data == "start_bot":
+        started_users.add(chat_id)
+        user_states.pop(chat_id, None)
         await query.message.reply_text(f"Бот перезапущен (v{BOT_VERSION}). Главное меню:", reply_markup=main_menu())
         return
         
@@ -833,13 +843,14 @@ async def reminder_loop(app):
                         elif current_weekday in m["times"]:
                             times_for_today = m["times"][current_weekday]
                             
-                        iif current_time_str in times_for_today:
+                        if current_time_str in times_for_today:
                             last_reminder_at = m.get("last_reminder_at")
                             reminder_key = f"{now_msk.date().isoformat()} {current_time_str}"
                             if last_reminder_at == reminder_key:
                                 continue
 
-                            unit_label, dose_label = get_display_units(m)
+                            _, dose_label = get_display_units(m)
+                            dose_val = m.get("daily_mg", 0)
                             
                             # Формируем текст дозировки динамически
                             dose_text = f"{dose_val:g} {dose_label}"
