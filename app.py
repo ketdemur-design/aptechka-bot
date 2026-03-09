@@ -985,14 +985,11 @@ async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⏰ Еще 20 мин", callback_data=f"later:20:{med_name}")]
         ])
         
-        await context.bot.send_message(
-            chat_id, 
-            await context.bot.send_message(
-            chat_id, 
+        wait context.bot.send_message(
+            chat_id,
             f"🔔 Напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {dose_label}",
             reply_markup=keyboard
         )
-
 
 async def send_delayed_reminder_fallback(bot, chat_id: int, med_name: str, minutes: int):
     await asyncio.sleep(minutes * 60)
