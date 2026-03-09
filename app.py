@@ -566,7 +566,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         med_name = data.split(":")[1]
         await query.edit_message_text(f"✅ Прием «{med_name}» отмечен. Молодец!")
 
-    startswith("later:"):
+    if data.startswith("later:"):
         _, med_name = data.split(":", 1)
         # Получаем минуты из callback_data (например "later:20:Лекарство")
         # Чтобы не ломать старую логику, если придет просто "later:Название", ставим 20
