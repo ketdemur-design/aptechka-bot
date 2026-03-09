@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.22"  # Ваша версия
+BOT_VERSION = "1.1.23"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -563,15 +563,21 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data.startswith("taken:"):
-        med_name = data.split(":")[1]
+        _, med_name = data.split(":", 1)
         await query.edit_message_text(f"✅ Прием «{med_name}» отмечен. Молодец!")
+        return
 
     if data.startswith("later:"):
-        _, med_name = data.split(":", 1)
-        # Получаем минуты из callback_data (например "later:20:Лекарство")
-        # Чтобы не ломать старую логику, если придет просто "later:Название", ставим 20
-        parts = data.split(":")
-        minutes = int(parts[1]) if len(parts) > 2 else 20 
+        # Формат callback_data:
+        # 1) new: later:<minutes>:<med_name>
+        # 2) legacy: later:<med_name>
+        parts = data.split(":", 2)
+        if len(parts) == 3 and parts[1].isdigit():
+            minutes = int(parts[1])
+            med_name = parts[2]
+        else:
+            minutes = 20
+            med_name = parts[1] if len(parts) > 1 else ""
         
         # Считаем время
         remind_at = get_now() + timedelta(minutes=minutes)
@@ -585,6 +591,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data={'chat_id': chat_id, 'med_name': med_name}
             )
             await query.edit_message_text(f"⏳ Хорошо, напомню про «{med_name}» через {minutes} мин. в {time_str}.")
+        return
 
     if data == "start_bot":
         started_users.add(chat_id)
@@ -912,11 +919,9 @@ async def reminder_loop(app):
                         
                         keyboard = InlineKeyboardMarkup([
                             [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{name}")],
-                            [
-                                InlineKeyboardButton("⏰ Напомнить через 10м", callback_data=f"later:10:{name}"),
-                                InlineKeyboardButton("⏰ Напомнить через 20м", callback_data=f"later:20:{name}"),
-                                InlineKeyboardButton("⏰ Напомнить через 30м", callback_data=f"later:30:{name}")
-                            ],
+                            [InlineKeyboardButton("⏰ Напомнить через 10м", callback_data=f"later:10:{name}")],
+                            [InlineKeyboardButton("⏰ Напомнить через 20м", callback_data=f"later:20:{name}")],
+                            [InlineKeyboardButton("⏰ Напомнить через 30м", callback_data=f"later:30:{name}")],
                             [InlineKeyboardButton("⏰ Напомнить через 1 час", callback_data=f"later:60:{name}")]
                         ])
 
