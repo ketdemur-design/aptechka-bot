@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.18"  # Ваша версия
+BOT_VERSION = "1.1.19"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -103,29 +103,39 @@ def _deserialize_med(med):
 
 
 def save_data_store():
+    # Используем глобальную переменную
     serializable = {
         str(chat_id): {name: _serialize_med(med) for name, med in meds.items()}
         for chat_id, meds in data_store.items()
     }
-    DATA_FILE.write_text(json.dumps(serializable, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Добавим временный файл для надежности (чтобы не повредить основной при сбое)
+    temp_file = DATA_FILE.with_suffix(".tmp")
+    temp_file.write_text(json.dumps(serializable, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_file.replace(DATA_FILE) # Атомарная замена
 
 
 def load_data_store():
+    global data_store
     if not DATA_FILE.exists():
-        return
-    try:
-        raw = json.loads(DATA_FILE.read_text(encoding="utf-8"))
-    except Exception as e:
-        print(f"Не удалось загрузить данные: {e}")
+        print(f"Файл {DATA_FILE} не найден, начинаем с пустого списка.")
+        data_store = {}
         return
 
-    data_store.clear()
-    for chat_id, meds in raw.items():
-        try:
-            chat_key = int(chat_id)
-        except (TypeError, ValueError):
-            continue
-        data_store[chat_key] = {name: _deserialize_med(med) for name, med in meds.items()}
+    try:
+        raw_text = DATA_FILE.read_text(encoding="utf-8")
+        if not raw_text.strip():
+            data_store = {}
+            return
+        
+        raw = json.loads(raw_text)
+        data_store.clear()
+        for chat_id, meds in raw.items():
+            # Преобразуем ключи обратно в int
+            data_store[int(chat_id)] = {name: _deserialize_med(med) for name, med in meds.items()}
+        print(f"Загружено лекарств: {len(data_store)}")
+    except Exception as e:
+        print(f"Ошибка при загрузке данных: {e}")
+        data_store = {}
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -961,7 +971,5 @@ def main():
     print(f"Бот v{BOT_VERSION} запущен...")
     app.run_polling()
 
-if __name__ == "__main__":
-    main()
 if __name__ == "__main__":
     main()
