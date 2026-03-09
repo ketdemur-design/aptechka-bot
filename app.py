@@ -826,12 +826,21 @@ async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = Non
 
         if med.get("course_days"):
             if med.get("is_started") and med.get("start_date"):
-                end_date = med["start_date"] + timedelta(days=med["course_days"])
-                date_str = end_date.strftime("%d.%m.%Y")
-                days_passed = (get_now() - med["start_date"]).days
+                # Приводим сохраненную дату к правильному формату с TZ
+                start_dt = med["start_date"]
+                if start_dt.tzinfo is None:
+                    start_dt = TZ_MOSCOW.localize(start_dt)
+                
+                now = get_now()
+                # Разница в полных сутках
+                days_passed = (now - start_dt).days
                 remaining_days = max(0, med["course_days"] - days_passed)
                 
-                msg += f"Курс: еще {remaining_days} дн. (до {date_str})\n"
+                # Дата окончания рассчитывается от даты старта
+                end_date = start_dt + timedelta(days=med["course_days"])
+                
+                msg += f"Курс: еще {remaining_days} дн. (до {end_date.strftime('%d.%m.%Y')})\n"
+                
                 if days_left >= remaining_days:
                     msg += "✅ На курс хватит\n"
                 else:
@@ -958,16 +967,22 @@ def main():
     # 2. Создаем приложение
     if not BOT_TOKEN: raise RuntimeError("BOT_TOKEN не найден")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # 3. Принудительная инициализация JobQueue, если она не подхватилась автоматически
+    if app.job_queue is None:
+        from telegram.ext import JobQueue
+        app.job_queue = JobQueue()
+        app.job_queue.set_application(app)
     
-    # 3. Привязываем команды и цикл напоминаний
+    # 4. Привязываем команды и цикл напоминаний
     app.post_init = post_init
     
-    # 4. Обработчики
+    # 5. Обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
-    # 5. Пуск
+    # 6. Пуск
     print(f"Бот v{BOT_VERSION} запущен...")
     app.run_polling()
 
