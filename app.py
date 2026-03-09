@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.23"  # Ваша версия
+BOT_VERSION = "1.1.24"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -72,6 +72,7 @@ if not BOT_TOKEN:
 data_store = {}
 user_states = {}
 started_users = set()
+pending_delayed_tasks = set()
 DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
 
 
@@ -583,14 +584,21 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         remind_at = get_now() + timedelta(minutes=minutes)
         time_str = remind_at.strftime("%H:%M")
         
-        # Создаем задание
+        # Создаем задание: через JobQueue, а если ее нет — через asyncio task.
         if context.job_queue:
             context.job_queue.run_once(
-                send_delayed_reminder, 
-                when=minutes * 60, 
+                send_delayed_reminder,
+                when=minutes * 60,
                 data={'chat_id': chat_id, 'med_name': med_name}
             )
-            await query.edit_message_text(f"⏳ Хорошо, напомню про «{med_name}» через {minutes} мин. в {time_str}.")
+        else:
+            task = asyncio.create_task(
+                send_delayed_reminder_fallback(context.bot, chat_id, med_name, minutes)
+            )
+            pending_delayed_tasks.add(task)
+            task.add_done_callback(pending_delayed_tasks.discard)
+
+        await query.edit_message_text(f"⏳ Хорошо, напомню про «{med_name}» через {minutes} мин. в {time_str}.")
         return
 
     if data == "start_bot":
@@ -979,9 +987,31 @@ async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
         
         await context.bot.send_message(
             chat_id, 
+            await context.bot.send_message(
+            chat_id, 
             f"🔔 Напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {dose_label}",
             reply_markup=keyboard
         )
+
+
+async def send_delayed_reminder_fallback(bot, chat_id: int, med_name: str, minutes: int):
+    await asyncio.sleep(minutes * 60)
+    meds = data_store.get(chat_id, {})
+    if med_name not in meds:
+        return
+
+    m = meds[med_name]
+    _, dose_label = get_display_units(m)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")],
+        [InlineKeyboardButton("⏰ Еще 20 мин", callback_data=f"later:20:{med_name}")]
+    ])
+
+    await bot.send_message(
+        chat_id,
+        f"🔔 Напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {dose_label}",
+        reply_markup=keyboard
+    )
 
 def main():
     # 1. Загружаем данные
