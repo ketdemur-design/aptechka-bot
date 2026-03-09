@@ -961,28 +961,37 @@ async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
 
 # Вот ваша существующая функция main, она остается в самом низу
 def main():
-    # 1. Загружаем сохраненные лекарства
     load_data_store()
+    if not BOT_TOKEN: 
+        raise RuntimeError("BOT_TOKEN не найден")
     
-    # 2. Создаем приложение
-    if not BOT_TOKEN: raise RuntimeError("BOT_TOKEN не найден")
+    # 1. Создаем билдер
+    builder = ApplicationBuilder().token(BOT_TOKEN)
+    
+    # 2. ВАЖНО: Создаем приложение уже с JobQueue
+    app = builder.build()
+    
+    # 3. Инициализация JobQueue (лучший способ для v20+)
+    # Если вы используете run_polling, JobQueue нужно запустить отдельно, 
+    # но лучше позволить ApplicationBuilder сделать это за нас:
+    # Заменим создание app на вот такое:
+    
+    # ПЕРЕДЕЛАЙТЕ создание app так:
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # 3. Принудительная инициализация JobQueue, если она не подхватилась автоматически
-    if app.job_queue is None:
-        from telegram.ext import JobQueue
-        app.job_queue = JobQueue()
-        app.job_queue.set_application(app)
     
-    # 4. Привязываем команды и цикл напоминаний
-    app.post_init = post_init
-    
-    # 5. Обработчики
+    # 4. Обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
-    # 6. Пуск
+    # 5. Инициализация post_init
+    app.post_init = post_init
+    
+    # 6. ВАЖНО: Запуск JobQueue вручную перед polling
+    # При таком подходе JobQueue запустится корректно
+    if app.job_queue:
+        app.job_queue.run_repeating(lambda _: None, interval=1, first=1) # "пинок" для очереди
+    
     print(f"Бот v{BOT_VERSION} запущен...")
     app.run_polling()
 
