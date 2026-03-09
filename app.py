@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.21"  # Ваша версия
+BOT_VERSION = "1.1.22"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -566,10 +566,25 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         med_name = data.split(":")[1]
         await query.edit_message_text(f"✅ Прием «{med_name}» отмечен. Молодец!")
 
-    elif data.startswith("later:"):
-        med_name = data.split(":")[1]
-        context.job_queue.run_once(send_delayed_reminder, when=1200, data={'chat_id': chat_id, 'med_name': med_name})
-        await query.edit_message_text(f"⏳ Напомню про «{med_name}» через 20 минут.")
+    startswith("later:"):
+        _, med_name = data.split(":", 1)
+        # Получаем минуты из callback_data (например "later:20:Лекарство")
+        # Чтобы не ломать старую логику, если придет просто "later:Название", ставим 20
+        parts = data.split(":")
+        minutes = int(parts[1]) if len(parts) > 2 else 20 
+        
+        # Считаем время
+        remind_at = get_now() + timedelta(minutes=minutes)
+        time_str = remind_at.strftime("%H:%M")
+        
+        # Создаем задание
+        if context.job_queue:
+            context.job_queue.run_once(
+                send_delayed_reminder, 
+                when=minutes * 60, 
+                data={'chat_id': chat_id, 'med_name': med_name}
+            )
+            await query.edit_message_text(f"⏳ Хорошо, напомню про «{med_name}» через {minutes} мин. в {time_str}.")
 
     if data == "start_bot":
         started_users.add(chat_id)
@@ -897,7 +912,12 @@ async def reminder_loop(app):
                         
                         keyboard = InlineKeyboardMarkup([
                             [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{name}")],
-                            [InlineKeyboardButton("⏰ Через 20 мин", callback_data=f"later:{name}")]
+                            [
+                                InlineKeyboardButton("⏰ Напомнить через 10м", callback_data=f"later:10:{name}"),
+                                InlineKeyboardButton("⏰ Напомнить через 20м", callback_data=f"later:20:{name}"),
+                                InlineKeyboardButton("⏰ Напомнить через 30м", callback_data=f"later:30:{name}")
+                            ],
+                            [InlineKeyboardButton("⏰ Напомнить через 1 час", callback_data=f"later:60:{name}")]
                         ])
 
                         await app.bot.send_message(
@@ -938,15 +958,23 @@ async def post_init(app):
 
 async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
-    med_name, chat_id = job.data['med_name'], job.data['chat_id']
+    med_name = job.data['med_name']
+    chat_id = job.data['chat_id']
     meds = data_store.get(chat_id, {})
+    
     if med_name in meds:
         m = meds[med_name]
-        unit_label, _ = get_display_units(m)
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")]])
+        _, dose_label = get_display_units(m)
+        
+        # Клавиатура с кнопками, чтобы можно было снова отложить, если нужно
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")],
+            [InlineKeyboardButton("⏰ Еще 20 мин", callback_data=f"later:20:{med_name}")]
+        ])
+        
         await context.bot.send_message(
             chat_id, 
-            f"🔔 Повторное напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {unit_label}",
+            f"🔔 Напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {dose_label}",
             reply_markup=keyboard
         )
 
