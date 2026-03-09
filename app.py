@@ -19,7 +19,7 @@ from telegram.ext import (
 from telegram import BotCommand
 
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.25"  # Ваша версия
+BOT_VERSION = "1.1.26"  # Ваша версия
 
 # Обновленный маппинг дней
 DAYS_MAP = {
@@ -211,6 +211,16 @@ FORM_LABELS = {
     "drops": ("флаконе", "флаконов"),
     "spray": ("флаконе", "флаконов"), # Добавлено
 }
+
+def reminder_action_menu(med_name: str):
+    """Унифицированное меню действий для напоминаний."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")],
+        [InlineKeyboardButton("⏰ Напомнить через 10м", callback_data=f"later:10:{med_name}")],
+        [InlineKeyboardButton("⏰ Напомнить через 20м", callback_data=f"later:20:{med_name}")],
+        [InlineKeyboardButton("⏰ Напомнить через 30м", callback_data=f"later:30:{med_name}")],
+        [InlineKeyboardButton("⏰ Напомнить через 1 час", callback_data=f"later:60:{med_name}")]
+    ])
 
 # ================== HELPERS ==================
 
@@ -925,13 +935,7 @@ async def reminder_loop(app):
                         doses_count = len(times_for_today)
                         per_dose = m['daily_mg'] / doses_count if doses_count > 0 else m['daily_mg']
                         
-                        keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{name}")],
-                            [InlineKeyboardButton("⏰ Напомнить через 10м", callback_data=f"later:10:{name}")],
-                            [InlineKeyboardButton("⏰ Напомнить через 20м", callback_data=f"later:20:{name}")],
-                            [InlineKeyboardButton("⏰ Напомнить через 30м", callback_data=f"later:30:{name}")],
-                            [InlineKeyboardButton("⏰ Напомнить через 1 час", callback_data=f"later:60:{name}")]
-                        ])
+                        keyboard = reminder_action_menu(name)
 
                         await app.bot.send_message(
                             chat_id,
@@ -979,11 +983,8 @@ async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
         m = meds[med_name]
         _, dose_label = get_display_units(m)
         
-        # Клавиатура с кнопками, чтобы можно было снова отложить, если нужно
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")],
-            [InlineKeyboardButton("⏰ Еще 20 мин", callback_data=f"later:20:{med_name}")]
-        ])
+        # Клавиатура с полным набором кнопок для повторных переносов
+        keyboard = reminder_action_menu(med_name)
         
         await context.bot.send_message(
             chat_id,
@@ -999,10 +1000,7 @@ async def send_delayed_reminder_fallback(bot, chat_id: int, med_name: str, minut
 
     m = meds[med_name]
     _, dose_label = get_display_units(m)
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")],
-        [InlineKeyboardButton("⏰ Еще 20 мин", callback_data=f"later:20:{med_name}")]
-    ])
+    keyboard = reminder_action_menu(med_name)
 
     await bot.send_message(
         chat_id,
