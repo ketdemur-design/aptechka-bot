@@ -985,7 +985,7 @@ async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⏰ Еще 20 мин", callback_data=f"later:20:{med_name}")]
         ])
         
-        wait context.bot.send_message(
+        await context.bot.send_message(
             chat_id,
             f"🔔 Напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {dose_label}",
             reply_markup=keyboard
