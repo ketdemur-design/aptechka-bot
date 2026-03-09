@@ -956,9 +956,8 @@ def main():
     if not BOT_TOKEN: 
         raise RuntimeError("BOT_TOKEN не найден")
     
-    # 2. Создаем приложение и включаем JobQueue одной командой
-    # .job_queue(True) — это все, что нужно для работы напоминаний
-    app = ApplicationBuilder().token(BOT_TOKEN).job_queue(True).build()
+    # 2. Создаем приложение
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     
     # 3. Настраиваем обработчики
     app.add_handler(CommandHandler("start", start))
