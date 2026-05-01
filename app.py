@@ -75,7 +75,6 @@ started_users = set()
 pending_delayed_tasks = set()
 DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
 
-
 def _serialize_med(med):
     payload = dict(med)
     for dt_key in ("created", "start_date"):
