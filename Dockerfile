@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose web server port
-EXPOSE 8000
+EXPOSE 3000
 
 # Run both processes via supervisord
 CMD ["supervisord", "-c", "/app/supervisord.conf"]
