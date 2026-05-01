@@ -13,9 +13,10 @@ from telegram.ext import (
     MessageHandler,
     ContextTypes,
     filters,
+    Application
 )
 
-# --- CONFIG ---
+# --- КОНФИГУРАЦИЯ ---
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 BOT_VERSION = "1.1.26"
 DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
@@ -32,7 +33,7 @@ DAYS_MAP = {
     "4": "Пятница", "5": "Суббота", "6": "Воскресенье"
 }
 
-# --- DATA HELPERS ---
+# --- ФУНКЦИИ ДАННЫХ ---
 
 def _serialize_med(med):
     payload = dict(med)
@@ -81,7 +82,7 @@ def load_data_store():
     except:
         data_store = {}
 
-# --- UI HELPERS ---
+# --- ФУНКЦИИ ИНТЕРФЕЙСА ---
 
 def main_menu():
     return ReplyKeyboardMarkup([
@@ -109,21 +110,6 @@ def course_menu():
         [InlineKeyboardButton("♾ Пожизненно", callback_data="course_forever")],
     ])
 
-def days_menu(med_name, times_dict=None):
-    if not isinstance(times_dict, dict): times_dict = {}
-    keyboard = []
-    for key in ["Everyday", "Weekdays", "Weekends"]:
-        text = f"📅 {DAYS_MAP[key]}"
-        if times_dict.get(key): text += f" ({', '.join(times_dict[key])})"
-        keyboard.append([InlineKeyboardButton(text, callback_data=f"set_day:{med_name}:{key}")])
-    for i in range(7):
-        day_key = str(i)
-        text = DAYS_MAP[day_key]
-        if times_dict.get(day_key): text += f" ({', '.join(times_dict[day_key])})"
-        keyboard.append([InlineKeyboardButton(text, callback_data=f"set_day:{med_name}:{day_key}")])
-    keyboard.append([InlineKeyboardButton("🔙 В меню", callback_data="main_menu")])
-    return InlineKeyboardMarkup(keyboard)
-
 def reminder_action_menu(med_name: str):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Выпил", callback_data=f"taken:{med_name}")],
@@ -134,44 +120,21 @@ def reminder_action_menu(med_name: str):
 def get_now():
     return datetime.now(TZ_MOSCOW)
 
-def get_display_units(med):
-    form = med.get("form", "tablets")
-    if form == "drops": return "мл", "капель"
-    if form == "spray": return "мл", "впрыскиваний"
-    if form == "liquid": return "мл", "мл"
-    return "мг", "мг"
-
 def calc_days_left(med):
     if not med.get("daily_mg") or med["daily_mg"] <= 0: return 0
     capacity_days = int(med["total_mg"] // med["daily_mg"])
     if not med.get("is_started") or not med.get("start_date"): return capacity_days
-    days_passed = (get_now() - med["start_date"]).days
+    start_dt = med["start_date"]
+    days_passed = (get_now() - start_dt).days
     return max(0, capacity_days - days_passed)
 
-def parse_times(text):
-    clean_text = text.replace(",", " ").replace(";", " ").replace(".", ":").replace("\n", " ")
-    times = re.findall(r'\b([0-9]{1,2})[:]([0-9]{2})\b', clean_text)
-    valid_times = []
-    for h, m in times:
-        hh, mm = int(h), int(m)
-        if hh == 24: hh = 0
-        if 0 <= hh <= 23 and 0 <= mm <= 59: valid_times.append(f"{hh:02d}:{mm:02d}")
-    return sorted(list(set(valid_times)))
-
-def format_schedule(times_dict):
-    if not isinstance(times_dict, dict): return "не установлено"
-    lines = []
-    for k, v in times_dict.items():
-        if v: lines.append(f"{DAYS_MAP.get(k, k)}: {', '.join(v)}")
-    return "\n".join(lines) if lines else "не установлено"
-
-# --- HANDLERS ---
+# --- ОБРАБОТЧИКИ БОТА ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     started_users.add(chat_id)
     await update.message.reply_text(
-        f"Привет 👋 (v{BOT_VERSION})\nИспользуй меню управления внизу экрана 👇",
+        f"Бот аптечка запущен (v{BOT_VERSION})\n\nРаботаю по времени МСК.",
         reply_markup=main_menu()
     )
 
@@ -184,7 +147,15 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Введите название лекарства:")
         return
     elif text == "📋 Мои курсы и прогноз":
-        await show_summary(update, context)
+        meds = data_store.get(chat_id, {})
+        if not meds:
+            await update.message.reply_text("Список пуст.")
+            return
+        res = "📋 Ваши лекарства:\n\n"
+        for n, m in meds.items():
+            days = calc_days_left(m)
+            res += f"💊 {n}: осталось на {days} дн.\n"
+        await update.message.reply_text(res)
         return
     
     state = user_states.get(chat_id)
@@ -195,7 +166,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if state["step"] == "name":
             d["name"] = text
             state["step"] = "form"
-            await update.message.reply_text("Выберите форму:", reply_markup=form_menu())
+            await update.message.reply_text("Выберите форму выпуска:", reply_markup=form_menu())
         elif state["step"] == "unit_mg":
             d["unit_mg"] = float(text.replace(",", "."))
             state["step"] = "units"
@@ -203,11 +174,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif state["step"] == "units":
             d["units"] = int(float(text.replace(",", ".")))
             state["step"] = "daily_mg"
-            await update.message.reply_text("Сколько в сутки назначено?")
+            await update.message.reply_text("Сколько в сутки назначено (мг или мл)?")
         elif state["step"] == "daily_mg":
             d["daily_mg"] = float(text.replace(",", "."))
             state["step"] = "course"
-            await update.message.reply_text("Срок приёма:", reply_markup=course_menu())
+            await update.message.reply_text("Длительность курса:", reply_markup=course_menu())
         elif state["step"] == "course_value":
             val = int(float(text.replace(",", ".")))
             if d.get("course_type") == "months": val *= 30
@@ -223,75 +194,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("form_"):
         user_states[chat_id]["data"]["form"] = data.split("_")[1]
         user_states[chat_id]["step"] = "unit_mg"
-        await query.message.reply_text("Объем/дозировка одной единицы?")
+        await query.message.reply_text("Какая дозировка/объем одной единицы?")
     elif data.startswith("course_"):
-        ctype = data.split("_")[1]
-        user_states[chat_id]["data"]["course_type"] = ctype
-        if ctype == "forever":
-            user_states[chat_id]["data"]["course_days"] = None
-            await save_medicine(query, chat_id)
-        else:
-            user_states[chat_id]["step"] = "course_value"
-            await query.message.reply_text("Введите количество:")
-    elif data.startswith("taken:"):
-        await query.edit_message_text(f"✅ Прием «{data.split(':')[1]}» отмечен.")
-
-async def save_medicine(update_or_query, chat_id):
-    d = user_states[chat_id]["data"]
-    total = d["unit_mg"] * d["units"]
-    if d["form"] == "drops": total = (d["unit_mg"] / 0.05) * d["units"]
-    elif d["form"] == "spray": total = (d["unit_mg"] / 0.1) * d["units"]
-    
-    data_store.setdefault(chat_id, {})[d["name"]] = {
-        "form": d["form"], "daily_mg": d["daily_mg"], "unit_mg": d["unit_mg"],
-        "total_mg": total, "course_days": d.get("course_days"),
-        "created": get_now(), "is_started": False, "start_date": None, "times": {}
-    }
-    save_data_store()
-    msg = f"✅ {d['name']} добавлено!"
-    if hasattr(update_or_query, 'message'): await update_or_query.message.reply_text(msg, reply_markup=main_menu())
-    else: await update_or_query.edit_message_text(msg)
-    user_states.pop(chat_id)
-
-async def show_summary(update, context):
-    chat_id = update.effective_chat.id
-    meds = data_store.get(chat_id, {})
-    if not meds:
-        await update.message.reply_text("Список пуст.")
-        return
-    msg = "📋 Ваша аптечка:\n\n"
-    for name, med in meds.items():
-        days = calc_days_left(med)
-        msg += f"💊 {name}: осталось на {days} дн.\n"
-    await update.message.reply_text(msg)
-
-# --- SYSTEM ---
-
-async def reminder_loop(application):
-    while True:
-        try:
-            now = get_now()
-            t_str = now.strftime("%H:%M")
-            for chat_id, meds in data_store.items():
-                for name, m in meds.items():
-                    if t_str in m.get("times", {}).get("Everyday", []):
-                        await application.bot.send_message(chat_id, f"⏰ Пора принять {name}", reply_markup=reminder_action_menu(name))
-        except: pass
-        await asyncio.sleep(30)
-
-async def post_init(application):
-    await application.bot.set_my_commands([BotCommand("start", "перезапустить бота")])
-    asyncio.create_task(reminder_loop(application))
-
-def main():
-    load_data_store()
-    token = os.getenv("BOT_TOKEN")
-    if not token: raise RuntimeError("BOT_TOKEN не найден")
-    app = ApplicationBuilder().token(token).post_init(post_init).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+        ctype = data.split("_"
