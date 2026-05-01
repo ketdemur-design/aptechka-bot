@@ -98,23 +98,32 @@ def main_menu():
 # только строку DATA_FILE на ту, что я выделил выше.
 
 async def post_init(app):
-    await app.bot.set_my_commands([BotCommand("start", "перезапустить бота")])
-    app.create_task(reminder_loop(app))
-
-async def reminder_loop(app):
-    # (Ваша функция цикла напоминаний)
-    while True:
-        await asyncio.sleep(30)
-        # ...
+    # Устанавливаем команды меню
+    await application.bot.set_my_commands([
+        BotCommand("start", "перезапустить бота")
+    ])
+    # Правильный запуск фоновой задачи напоминаний
+    asyncio.create_task(reminder_loop(application))
 
 def main():
+    # 1. Загружаем данные из файла
     load_data_store()
-    BOT_TOKEN = os.getenv("BOT_TOKEN")
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # 2. Получаем токен из переменных окружения
+    token = os.getenv("BOT_TOKEN")
+    if not token:
+        raise RuntimeError("BOT_TOKEN не найден в переменных окружения!")
+
+    # 3. Создаем приложение (правильный способ через .post_init)
+    app = ApplicationBuilder().token(token).post_init(post_init).build()
+
+    # 4. Регистрируем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-    app.post_init = post_init
+
+    # 5. Запуск
+    print(f"Бот v{BOT_VERSION} запущен...")
     app.run_polling()
 
 if __name__ == "__main__":
