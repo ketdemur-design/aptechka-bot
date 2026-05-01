@@ -196,4 +196,16 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_states[chat_id]["step"] = "unit_mg"
         await query.message.reply_text("Какая дозировка/объем одной единицы?")
     elif data.startswith("course_"):
+        ctype = data.split("_")[1] # Исправленная строка
+        user_states[chat_id]["data"]["course_type"] = ctype
+        if ctype == "forever":
+            user_states[chat_id]["data"]["course_days"] = None
+            await save_medicine(query, chat_id)
+        else:
+            user_states[chat_id]["step"] = "course_value"
+            await query.message.reply_text("Введите количество дней/месяцев:")
+    elif data.startswith("taken:"):
+        name = data.split(":")[1]
+        await query.edit_message_text(f"✅ Прием «{name}» подтвержден.")
+        
 ctype = data.split("_")[1]
