@@ -1,7 +1,19 @@
 version: '3.8'
+
 services:
-  astro-bot:
+  medbot:
     build: .
     restart: always
+    ports:
+      - "8000:8000"          # PWA веб-интерфейс
     env_file:
       - .env
+    environment:
+      - DATA_FILE=/data/meds_data.json
+      - WEB_PORT=8000
+    volumes:
+      - medbot_data:/data    # Общее хранилище для бота и веб-сервера
+
+volumes:
+  medbot_data:
+    driver: local
