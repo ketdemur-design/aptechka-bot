@@ -1,2 +1,4 @@
 python-telegram-bot
 pytz
+fastapi
+uvicorn[standard]
