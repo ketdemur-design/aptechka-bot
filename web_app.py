@@ -275,5 +275,6 @@ def index():
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("WEB_PORT", 8000))
+    # Берем порт, который дал хостинг (3000), или 3000 по умолчанию
+    port = int(os.getenv("PORT", 3000))
     uvicorn.run("web_app:app", host="0.0.0.0", port=port, reload=False)
