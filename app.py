@@ -954,18 +954,16 @@ async def send_delayed_reminder_fallback(bot, chat_id: int, med_name: str, minut
 # ================== POST_INIT И MAIN ==================
 
 async def post_init(application):
-    """Регистрация команд и загрузка данных — вызывается до run_polling."""
+    """Вызывается PTB после инициализации Application.
+    Регистрируем команды, загружаем данные и запускаем фоновый цикл."""
     await application.bot.set_my_commands([
         BotCommand("start", "перезапустить бота"),
     ])
     load_data_store()
+    # asyncio.create_task — корректный способ запуска фоновой корутины.
+    # event loop уже существует к моменту вызова post_init.
+    asyncio.create_task(reminder_loop(application))
     print(f"Бот v{BOT_VERSION} инициализирован. DATA_FILE={DATA_FILE}")
-
-
-async def post_run(application):
-    """Запуск фонового цикла — вызывается ПОСЛЕ того, как event loop уже работает.
-    Именно здесь create_task безопасен и PTBUserWarning не возникает."""
-    application.create_task(reminder_loop(application))
     print("Фоновый цикл напоминаний запущен!")
 
 
@@ -973,8 +971,7 @@ def main():
     app = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
-        .post_init(post_init)   # команды бота + загрузка данных
-        .post_run(post_run)     # фоновый цикл — строго после старта
+        .post_init(post_init)
         .build()
     )
 
