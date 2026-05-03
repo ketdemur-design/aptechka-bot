@@ -816,7 +816,6 @@ async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = Non
 # ================== ФОНОВЫЙ ЦИКЛ НАПОМИНАНИЙ ==================
 
 async def reminder_loop(application):
-    print("Фоновый цикл напоминаний запущен!")
     while True:
         try:
             now_msk          = get_now()
