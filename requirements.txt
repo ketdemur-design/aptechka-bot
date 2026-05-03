@@ -1,3 +1,8 @@
+python-telegram-bot==20.7
+pytz
+fastapi
+uvicorn[standard]
+pydantic
 python-telegram-bot
 pytz
 fastapi
