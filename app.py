@@ -435,7 +435,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🔧 Дозировка изменена! Теперь хватит на {days} дн.", reply_markup=main_menu())
 
     # ── REFILL ────────────────────────────────────────────────────────────────
-     elif state["flow"] == "refill":
+    elif state["flow"] == "refill":
         if state["step"] == "unit_mg":
             state["data"]["unit_mg"] = float(text.replace(",", "."))
             state["step"] = "units"
@@ -480,29 +480,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 needed_resource = med["course_days"] * med["daily_mg"]
                 if med["total_mg"] < needed_resource:
                     deficit = needed_resource - med["total_mg"]
-                    if med.get("form") == "drops":
-                        deficit_ml = deficit * 0.05
-                        missing_units = deficit_ml / new_unit_size
-                    elif med.get("form") == "spray":
-                        deficit_ml = deficit * 0.1
-                        missing_units = deficit_ml / new_unit_size
-                    else:
-                        missing_units = deficit / new_unit_size
-                    msg += (
-                        f"\n⚠️ На курс не хватит, нужно докупить "
-                        f"{missing_units:g} ед. по {new_unit_size:g} {unit_label}."
-                    )
-                else:
-                    surplus = med["total_mg"] - needed_resource
-                    if surplus > 0:
-                        if med.get("form") in ("drops", "spray"):
-                            factor = 0.05 if med["form"] == "drops" else 0.1
-                            surplus_units = (surplus * factor) / new_unit_size
-                        else:
-                            surplus_units = surplus / new_unit_size
-                        msg += f"\n✅ На курс хватит, останется излишек {surplus_units:g} ед."
-                    else:
-                        msg += "\n✅ На курс хватит ровно."
+                    
 
             await update.message.reply_text(msg, reply_markup=main_menu())
             user_states.pop(chat_id)
