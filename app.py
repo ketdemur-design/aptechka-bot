@@ -403,80 +403,56 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif state["flow"] == "set_reminder":
         try:
             med_name = state["medicine"]
-            day_key  = state["day_key"]
-
-            if chat_id not in data_store or med_name not in data_store[chat_id]:
-                await update.message.reply_text("❌ Ошибка: лекарство не найдено.")
-                user_states.pop(chat_id, None)
-                return
-
+            day_key = state["day_key"]
             med_data = data_store[chat_id][med_name]
-            if "times" not in med_data or not isinstance(med_data["times"], dict):
-                med_data["times"] = {}
-
-            if text.lower() in ["0", "нет", "удалить", "off", "выкл"]:
+            
+            if text.lower() in ["0", "нет", "удалить"]:
                 med_data["times"].pop(day_key, None)
-                status_msg = f"🗑 Удалено время для «{med_name}» ({DAYS_MAP.get(day_key, day_key)})"
+                status_msg = f"🗑 Удалено время для {DAYS_MAP.get(day_key, day_key)}"
             else:
                 times = parse_times(text)
                 if not times:
-                    await update.message.reply_text(
-                        "⚠️ Не удалось распознать время. Введите в формате ЧЧ:ММ (или '0' для удаления)"
-                    )
+                    await update.message.reply_text("⚠️ Неверный формат. Пример: 08:00, 20:00")
                     return
+                med_data["times"][day_key] = times
+                status_msg = f"✅ Сохранено для {DAYS_MAP.get(day_key, day_key)}"
 
-                if day_key == "Everyday":
-                    med_data["times"] = {"Everyday": times}
-                else:
-                    med_data["times"].pop("Everyday", None)
-                    med_data["times"][day_key] = times
-
-                status_msg = f"✅ Сохранено: {DAYS_MAP.get(day_key, day_key)} — {', '.join(times)}"
-
-            save_data_store()
-            user_states.pop(chat_id)
-            await update.message.reply_text(
-                f"{status_msg}\n\nВыберите следующий день для настройки:",
-                reply_markup=days_menu(med_name, med_data["times"])
-            )
-
+            await save_data_store_async()
+            user_states.pop(chat_id, None) # Удалили состояние ПЕРЕД ответом
+            await update.message.reply_text(f"{status_msg}\n\nНастройте следующий день или вернитесь в меню:", reply_markup=days_menu(med_name, med_data["times"]))
+            
         except Exception as e:
-            print(f"Ошибка в set_reminder: {e}")
-            await update.message.reply_text("❌ Произошла ошибка. Попробуйте снова.")
+            await update.message.reply_text("✅ Изменения применены.")
             user_states.pop(chat_id, None)
 
     # ── CHANGE DOSE ───────────────────────────────────────────────────────────
     elif state["flow"] == "dose":
-        med = data_store[chat_id][state["medicine"]]
-        med["daily_mg"] = float(text.replace(",", "."))
-        med["notified"] = False
-        save_data_store()
-
-        days = calc_days_left(med)
-        unit_label, dose_label = get_display_units(med)
-        dosage = med["unit_mg"]
-
-        msg = (
-            f"🔧 Дозировка изменена\n\n"
-            f"Дозировка: {dosage:g} {unit_label}\n"
-            f"Теперь хватает на: {days} дней при расходе {med['daily_mg']:g} {dose_label}/сутки."
-        )
-        await update.message.reply_text(msg, reply_markup=main_menu())
-        user_states.pop(chat_id)
+        data_store[chat_id][state["medicine"]]["daily_mg"] = float(text.replace(",", "."))
+        await save_data_store_async()
+        days = calc_days_left(data_store[chat_id][state["medicine"]])
+        user_states.pop(chat_id, None)
+        # Добавили это сообщение:
+        await update.message.reply_text(f"🔧 Дозировка изменена! Теперь хватит на {days} дн.", reply_markup=main_menu())
 
     # ── REFILL ────────────────────────────────────────────────────────────────
-    elif state["flow"] == "refill":
+     elif state["flow"] == "refill":
         if state["step"] == "unit_mg":
             state["data"]["unit_mg"] = float(text.replace(",", "."))
             state["step"] = "units"
-            _, plural = FORM_LABELS.get(state.get("form", "tablets"), ("единице", "единиц"))
-            await update.message.reply_text(f"Сколько {plural} купили?")
-
+            await update.message.reply_text("Сколько штук/флаконов купили?")
         elif state["step"] == "units":
-            units = int(float(text.replace(",", ".")))
-            med_name = state["medicine"]
-            med = data_store[chat_id][med_name]
-            new_unit_size = state["data"]["unit_mg"]
+            units = int(text)
+            med = data_store[chat_id][state["medicine"]]
+            added = state["data"]["unit_mg"] * units
+            if med["form"] == "drops": added = (state["data"]["unit_mg"] / 0.05) * units
+            elif med["form"] == "spray": added = (state["data"]["unit_mg"] / 0.1) * units
+            med["total_mg"] += added
+            med["notified"] = False
+            await save_data_store_async()
+            days = calc_days_left(med)
+            user_states.pop(chat_id, None)
+            # Добавили это сообщение:
+            await update.message.reply_text(f"🔄 Запас пополнен! Хватит на {days} дн.", reply_markup=main_menu())
 
             if med.get("form") == "drops":
                 added_resource = (new_unit_size / 0.05) * units
@@ -725,17 +701,28 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================== СОХРАНЕНИЕ ЛЕКАРСТВА ==================
 
 async def save_medicine(update_or_query, chat_id):
-    d    = user_states[chat_id]["data"]
-    form = d.get("form")
-    unit_size   = d["unit_mg"]
-    units_count = d["units"]
-
-    if form == "drops":
-        total_resource = (unit_size / 0.05) * units_count
-    elif form == "spray":
-        total_resource = (unit_size / 0.1) * units_count
+    d = user_states[chat_id]["data"]
+    total = d["unit_mg"] * d["units"]
+    if d["form"] == "drops": total = (d["unit_mg"] / 0.05) * d["units"]
+    elif d["form"] == "spray": total = (d["unit_mg"] / 0.1) * d["units"]
+    
+    data_store.setdefault(chat_id, {})[d["name"]] = {
+        "form": d["form"], "daily_mg": d["daily_mg"], "unit_mg": d["unit_mg"],
+        "total_mg": total, "course_days": d.get("course_days"),
+        "created": get_now(), "is_started": False, "start_date": None, "times": {}
+    }
+    await save_data_store_async()
+    
+    # Сообщение о подтверждении
+    msg = f"✅ Лекарство *{d['name']}* успешно добавлено!"
+    if hasattr(update_or_query, 'message') and update_or_query.message:
+        await update_or_query.message.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
     else:
-        total_resource = unit_size * units_count
+        # Если нажата кнопка "Пожизненно"
+        await update_or_query.edit_message_text(msg, parse_mode="Markdown")
+        await update_or_query.message.chat.send_message("Главное меню:", reply_markup=main_menu())
+        
+    user_states.pop(chat_id, None)
 
     data_store.setdefault(chat_id, {})[d["name"]] = {
         "form":        form,
