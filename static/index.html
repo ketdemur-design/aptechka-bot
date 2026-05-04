@@ -1,680 +1,454 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f1117">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="МедБот">
-<title>МедБот — Мои лекарства</title>
-<link rel="manifest" href="/manifest.json">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
-<style>
-  /* ── Reset & Base ── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Моя Аптечка</title>
+    <!-- Tailwind CSS CDN + базовые стили -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Дополнительные стили и кастомные анимации -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+        }
+        
+        body {
+            background: var(--bg);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
+            background-image: 
+                radial-gradient(circle at 100% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 0% 100%, rgba(168, 85, 247, 0.1) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
 
-  :root {
-    --bg:          #0f1117;
-    --bg2:         #181c27;
-    --bg3:         #1f2433;
-    --border:      rgba(255,255,255,0.07);
-    --accent:      #7c6af7;
-    --accent2:     #a78bfa;
-    --accent-glow: rgba(124,106,247,0.25);
-    --green:       #34d399;
-    --yellow:      #fbbf24;
-    --red:         #f87171;
-    --text:        #e8eaf0;
-    --text2:       #8892aa;
-    --text3:       #4a5468;
-    --radius:      18px;
-    --radius-sm:   10px;
-    --safe-top:    env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-  }
+        :root {
+            --bg: #e2e8f0;
+            --surface: #ffffff;
+            --surface-hover: #f1f5f9;
+            --btn-secondary: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+        }
 
-  html { font-size: 16px; }
-  body {
-    font-family: 'Space Grotesk', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100dvh;
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
-  }
+        .dark {
+            --bg: #090b11;
+            --surface: #1a1f2e;
+            --surface-hover: #252b3d;
+            --btn-secondary: #2d3446;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+        }
 
-  /* ── App shell ── */
-  .app-header {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    padding: calc(var(--safe-top) + 12px) 20px 14px;
-    background: rgba(15,17,23,0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .header-title {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 1.35rem;
-    letter-spacing: -0.02em;
-    background: linear-gradient(135deg, #fff 30%, var(--accent2));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .header-actions { display: flex; gap: 8px; align-items: center; }
-
-  .icon-btn {
-    width: 38px; height: 38px;
-    border-radius: 50%;
-    border: 1px solid var(--border);
-    background: var(--bg3);
-    display: grid; place-items: center;
-    cursor: pointer;
-    font-size: 1rem;
-    transition: background 0.2s, transform 0.15s;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .icon-btn:active { background: var(--bg2); transform: scale(0.93); }
-
-  /* ── Content ── */
-  .content {
-    padding: 18px 16px calc(var(--safe-bottom) + 20px);
-    max-width: 520px;
-    margin: 0 auto;
-  }
-
-  /* ── Stats strip ── */
-  .stats-strip {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 22px;
-  }
-
-  .stat-card {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 12px 10px;
-    text-align: center;
-  }
-  .stat-value {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 4px;
-  }
-  .stat-label { font-size: 0.7rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
-
-  /* ── Med cards ── */
-  .section-label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 10px;
-    padding-left: 2px;
-  }
-
-  .cards-list { display: flex; flex-direction: column; gap: 14px; }
-
-  .med-card {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px;
-    position: relative;
-    overflow: hidden;
-    transition: transform 0.2s, box-shadow 0.2s;
-    animation: fadeUp 0.4s ease both;
-  }
-  .med-card:active { transform: scale(0.99); }
-
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  .med-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-  .med-card.active-course::before { opacity: 1; }
-
-  .card-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .med-icon {
-    width: 44px; height: 44px;
-    border-radius: 12px;
-    display: grid; place-items: center;
-    font-size: 1.4rem;
-    flex-shrink: 0;
-  }
-  .form-tablets  { background: rgba(124,106,247,0.15); }
-  .form-capsules { background: rgba(167,139,250,0.15); }
-  .form-drops    { background: rgba(52,211,153,0.15); }
-  .form-spray    { background: rgba(251,191,36,0.15); }
-  .form-liquid   { background: rgba(96,165,250,0.15); }
-  .form-sachet   { background: rgba(248,113,113,0.15); }
-
-  .med-info { flex: 1; min-width: 0; }
-  .med-name {
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 1.05rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 3px;
-  }
-  .med-sub { font-size: 0.78rem; color: var(--text2); }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.68rem;
-    font-weight: 600;
-    padding: 3px 9px;
-    border-radius: 100px;
-    flex-shrink: 0;
-  }
-  .badge-active   { background: rgba(52,211,153,0.15); color: var(--green); }
-  .badge-paused   { background: rgba(255,255,255,0.06); color: var(--text2); }
-  .badge-warning  { background: rgba(251,191,36,0.15); color: var(--yellow); }
-  .badge-critical { background: rgba(248,113,113,0.15); color: var(--red); }
-
-  /* ── Progress bar ── */
-  .progress-section { margin-bottom: 14px; }
-  .progress-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 7px;
-  }
-  .progress-days {
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 1.1rem;
-  }
-  .progress-days span { font-size: 0.78rem; font-weight: 400; color: var(--text2); margin-left: 2px; }
-  .progress-pct { font-size: 0.75rem; color: var(--text2); }
-
-  .progress-track {
-    height: 6px;
-    background: var(--bg3);
-    border-radius: 100px;
-    overflow: hidden;
-  }
-  .progress-fill {
-    height: 100%;
-    border-radius: 100px;
-    transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
-  }
-
-  /* ── Card meta row ── */
-  .card-meta {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
-  }
-  .meta-chip {
-    font-size: 0.72rem;
-    color: var(--text2);
-    background: var(--bg3);
-    border-radius: 6px;
-    padding: 4px 8px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  /* ── Take button ── */
-  .take-btn {
-    width: 100%;
-    padding: 13px;
-    border-radius: var(--radius-sm);
-    border: none;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    color: #fff;
-    font-family: 'Space Grotesk', sans-serif;
-    font-weight: 600;
-    font-size: 0.92rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
-    box-shadow: 0 4px 20px var(--accent-glow);
-    -webkit-tap-highlight-color: transparent;
-  }
-  .take-btn:active { opacity: 0.85; transform: scale(0.98); }
-  .take-btn:disabled {
-    background: var(--bg3);
-    color: var(--text3);
-    cursor: not-allowed;
-    box-shadow: none;
-  }
-
-  .take-btn.loading {
-    pointer-events: none;
-  }
-  .take-btn.loading .btn-icon { animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── Toast ── */
-  #toast {
-    position: fixed;
-    bottom: calc(var(--safe-bottom) + 20px);
-    left: 50%;
-    transform: translateX(-50%) translateY(80px);
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 11px 20px;
-    border-radius: 100px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    z-index: 999;
-    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-    white-space: nowrap;
-    pointer-events: none;
-  }
-  #toast.show { transform: translateX(-50%) translateY(0); }
-
-  /* ── Empty / Error ── */
-  .empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text3);
-  }
-  .empty-state .emoji { font-size: 3rem; margin-bottom: 12px; }
-  .empty-state p { font-size: 0.9rem; line-height: 1.6; }
-
-  /* ── Skeleton loader ── */
-  .skeleton {
-    background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.4s infinite;
-    border-radius: var(--radius-sm);
-  }
-  @keyframes shimmer { to { background-position: -200% 0; } }
-
-  .skel-card {
-    height: 180px;
-    border-radius: var(--radius);
-    margin-bottom: 14px;
-  }
-
-  /* ── Refresh indicator ── */
-  .refresh-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--green);
-    display: inline-block;
-  }
-  .refresh-dot.stale { background: var(--yellow); }
-
-  /* ── Chat filter ── */
-  .filter-row {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    margin-bottom: 18px;
-    padding-bottom: 4px;
-    scrollbar-width: none;
-  }
-  .filter-row::-webkit-scrollbar { display: none; }
-
-  .filter-pill {
-    flex-shrink: 0;
-    font-size: 0.78rem;
-    font-weight: 500;
-    padding: 6px 14px;
-    border-radius: 100px;
-    border: 1px solid var(--border);
-    background: var(--bg2);
-    color: var(--text2);
-    cursor: pointer;
-    transition: all 0.15s;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .filter-pill.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
-
-  /* ── Glow bg decoration ── */
-  .bg-glow {
-    position: fixed;
-    pointer-events: none;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.12;
-    z-index: 0;
-  }
-  .bg-glow-1 { width: 300px; height: 300px; background: var(--accent); top: -80px; right: -60px; }
-  .bg-glow-2 { width: 250px; height: 250px; background: var(--green); bottom: 10%; left: -80px; }
-  .content { position: relative; z-index: 1; }
-</style>
+        .glass {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05);
+        }
+        .dark .glass {
+            background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.8) 100%);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05);
+        }
+        .dark .card-shadow {
+            box-shadow: 0 20px 40px -12px rgba(0,0,0,0.5);
+        }
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(139,92,246,0.05), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .progress-bar {
+            transition: width 0.8s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+        }
+        .animate-pulse-slow {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        /* Стили для форм и кнопок */
+        .btn-secondary {
+            background-color: var(--btn-secondary);
+        }
+    </style>
 </head>
-<body>
-
-<div class="bg-glow bg-glow-1"></div>
-<div class="bg-glow bg-glow-2"></div>
-
-<header class="app-header">
-  <div>
-    <div class="header-title">💊 МедБот</div>
-  </div>
-  <div class="header-actions">
-    <div id="syncDot" class="refresh-dot" title="Данные актуальны"></div>
-    <button class="icon-btn" id="refreshBtn" title="Обновить" aria-label="Обновить">↻</button>
-  </div>
-</header>
-
-<main class="content">
-  <!-- Stats strip -->
-  <div class="stats-strip" id="statsStrip">
-    <div class="stat-card skeleton" style="height:70px"></div>
-    <div class="stat-card skeleton" style="height:70px"></div>
-    <div class="stat-card skeleton" style="height:70px"></div>
-  </div>
-
-  <!-- Chat filter -->
-  <div class="filter-row" id="filterRow" style="display:none"></div>
-
-  <!-- Cards -->
-  <div class="section-label" id="sectionLabel">Загрузка...</div>
-  <div class="cards-list" id="cardsList">
-    <div class="skel-card skeleton"></div>
-    <div class="skel-card skeleton"></div>
-  </div>
-</main>
-
-<div id="toast"></div>
-
-<script>
-// ─── State ────────────────────────────────────────────────────────────────────
-let allMeds = [];
-let activeChatId = 'all';
-let lastFetch = 0;
-
-// ─── Utils ───────────────────────────────────────────────────────────────────
-const FORM_ICONS = {
-  tablets:  '💊',
-  capsules: '💊',
-  drops:    '👁️',
-  spray:    '💨',
-  liquid:   '🧴',
-  sachet:   '📦',
-};
-
-function daysColor(days) {
-  if (days <= 3)  return 'var(--red)';
-  if (days <= 7)  return 'var(--yellow)';
-  return 'var(--green)';
-}
-
-function progressColor(pct) {
-  if (pct >= 85) return 'var(--red)';
-  if (pct >= 60) return 'var(--yellow)';
-  return 'linear-gradient(90deg, var(--accent), var(--accent2))';
-}
-
-function daysBadge(days, isStarted) {
-  if (!isStarted) return { cls: 'badge-paused', text: '⏸ Ожидание' };
-  if (days <= 3)  return { cls: 'badge-critical', text: `⚠️ ${days} дн.` };
-  if (days <= 7)  return { cls: 'badge-warning',  text: `🛒 ${days} дн.` };
-  return { cls: 'badge-active', text: '▶ Приём' };
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2600);
-}
-
-// ─── Fetch meds ───────────────────────────────────────────────────────────────
-async function fetchMeds(silent = false) {
-  const dot = document.getElementById('syncDot');
-  dot.className = 'refresh-dot stale';
-  try {
-    const res = await fetch('/api/meds');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    allMeds = await res.json();
-    lastFetch = Date.now();
-    dot.className = 'refresh-dot';
-    renderAll();
-  } catch(e) {
-    dot.className = 'refresh-dot stale';
-    if (!silent) showToast('⚠️ Не удалось загрузить данные');
-  }
-}
-
-// ─── Render ───────────────────────────────────────────────────────────────────
-function renderAll() {
-  renderStats();
-  renderFilters();
-  renderCards();
-}
-
-function renderStats() {
-  const meds = filteredMeds();
-  const total   = meds.length;
-  const active  = meds.filter(m => m.is_started).length;
-  const warning = meds.filter(m => m.days_left <= 7 && m.is_started).length;
-
-  document.getElementById('statsStrip').innerHTML = `
-    <div class="stat-card">
-      <div class="stat-value" style="color:var(--accent2)">${total}</div>
-      <div class="stat-label">Лекарств</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value" style="color:var(--green)">${active}</div>
-      <div class="stat-label">Активных</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value" style="color:${warning > 0 ? 'var(--yellow)' : 'var(--text2)'}">${warning}</div>
-      <div class="stat-label">Заканчивается</div>
-    </div>
-  `;
-}
-
-function renderFilters() {
-  const chatIds = [...new Set(allMeds.map(m => m.chat_id))];
-  if (chatIds.length <= 1) {
-    document.getElementById('filterRow').style.display = 'none';
-    return;
-  }
-  const row = document.getElementById('filterRow');
-  row.style.display = 'flex';
-  row.innerHTML = `
-    <button class="filter-pill ${activeChatId === 'all' ? 'active' : ''}" onclick="setFilter('all')">Все</button>
-    ${chatIds.map(id => `
-      <button class="filter-pill ${activeChatId === id ? 'active' : ''}" onclick="setFilter('${id}')">
-        ID ${id.slice(-4)}
-      </button>
-    `).join('')}
-  `;
-}
-
-function setFilter(id) {
-  activeChatId = id;
-  renderAll();
-}
-
-function filteredMeds() {
-  if (activeChatId === 'all') return allMeds;
-  return allMeds.filter(m => m.chat_id === activeChatId);
-}
-
-function renderCards() {
-  const meds = filteredMeds();
-  const label = document.getElementById('sectionLabel');
-  const list  = document.getElementById('cardsList');
-
-  if (meds.length === 0) {
-    label.textContent = '';
-    list.innerHTML = `
-      <div class="empty-state">
-        <div class="emoji">💊</div>
-        <p>Лекарств пока нет.<br>Добавь их через Telegram-бот.</p>
-      </div>
-    `;
-    return;
-  }
-
-  label.textContent = `${meds.length} ${meds.length === 1 ? 'лекарство' : meds.length < 5 ? 'лекарства' : 'лекарств'}`;
-
-  // Sort: active first, then by days_left ascending
-  const sorted = [...meds].sort((a, b) => {
-    if (a.is_started !== b.is_started) return a.is_started ? -1 : 1;
-    return a.days_left - b.days_left;
-  });
-
-  list.innerHTML = sorted.map((m, i) => cardHTML(m, i)).join('');
-}
-
-function cardHTML(m, i) {
-  const badge   = daysBadge(m.days_left, m.is_started);
-  const icon    = FORM_ICONS[m.form] || '💊';
-  const fillPct = Math.min(100, m.progress);
-  const bgColor = `form-${m.form}`;
-  const dColor  = daysColor(m.days_left);
-  const pColor  = progressColor(fillPct);
-  const canTake = m.is_started && m.days_left > 0;
-  const delay   = `animation-delay: ${i * 0.06}s`;
-
-  const courseInfo = m.course_days
-    ? `<span class="meta-chip">📆 ${m.course_days} дн. курс</span>`
-    : `<span class="meta-chip">♾ Бессрочно</span>`;
-
-  const schedule = m.schedule !== 'не установлено'
-    ? `<span class="meta-chip">⏰ ${m.schedule.split('\n')[0]}</span>`
-    : '';
-
-  return `
-    <div class="med-card ${m.is_started ? 'active-course' : ''}" style="${delay}">
-      <div class="card-top">
-        <div class="med-icon ${bgColor}">${icon}</div>
-        <div class="med-info">
-          <div class="med-name">${escHtml(m.name)}</div>
-          <div class="med-sub">${m.dose_line}</div>
+<body class="pb-20 px-4 pt-8 max-w-lg mx-auto">
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-10">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)] bg-clip-text text-transparent">
+                Мои лекарства
+            </h1>
+            <p class="text-[var(--text-secondary)] text-sm font-medium mt-1">Будьте здоровы и не пропускайте приём</p>
         </div>
-        <span class="badge ${badge.cls}">${badge.text}</span>
-      </div>
-
-      <div class="progress-section">
-        <div class="progress-meta">
-          <div class="progress-days" style="color:${dColor}">
-            ${m.days_left}<span>дн. осталось</span>
-          </div>
-          <div class="progress-pct">${Math.round(fillPct)}% использовано</div>
+        <div class="flex items-center gap-2">
+            <button id="themeToggle" class="p-2.5 glass rounded-2xl hover:bg-[var(--surface-hover)] transition-colors group">
+                <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--text-primary)] group-hover:text-amber-400"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            </button>
+            <button id="refreshBtn" class="p-2.5 glass rounded-2xl hover:bg-[var(--surface-hover)] transition-colors group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--text-primary)] group-hover:text-violet-400 transition-all"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            </button>
         </div>
-        <div class="progress-track">
-          <div class="progress-fill" style="width:${fillPct}%; background:${pColor}"></div>
+    </header>
+
+    <!-- Stats Summary -->
+    <div class="grid grid-cols-2 gap-4 mb-8">
+        <div class="glass p-5 rounded-[2rem] card-shadow">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="p-2 bg-emerald-400/10 rounded-xl text-emerald-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <span class="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-wider">Активные</span>
+            </div>
+            <div id="activeCount" class="text-3xl font-bold text-[var(--text-primary)]">0</div>
         </div>
-      </div>
-
-      <div class="card-meta">
-        ${courseInfo}
-        ${schedule}
-        <span class="meta-chip">${icon} Остаток: ${m.remaining_doses} ${m.dose_label}</span>
-      </div>
-
-      <button
-        class="take-btn"
-        ${canTake ? '' : 'disabled'}
-        onclick="takeMed('${escAttr(m.chat_id)}', '${escAttr(m.name)}', this)"
-      >
-        <span class="btn-icon">✅</span>
-        Приняла лекарство
-      </button>
+        <div class="glass p-5 rounded-[2rem] card-shadow">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="p-2 bg-amber-400/10 rounded-xl text-amber-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+                </div>
+                <span class="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-wider">Заканчиваются</span>
+            </div>
+            <div id="expiringCount" class="text-3xl font-bold text-[var(--text-primary)]">0</div>
+        </div>
     </div>
-  `;
-}
 
-// ─── Take medication ─────────────────────────────────────────────────────────
-async function takeMed(chatId, medName, btn) {
-  btn.classList.add('loading');
-  btn.querySelector('.btn-icon').textContent = '⟳';
-  btn.disabled = true;
+    <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-6 pl-2">Текущий график</h2>
 
-  try {
-    const res = await fetch('/api/taken', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, med_name: medName }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Ошибка');
+    <!-- Medications List -->
+    <div id="medsList" class="space-y-4"></div>
 
-    showToast(`✅ ${medName} — принято! Осталось ${data.days_left} дн.`);
-    // Update local state optimistically
-    const med = allMeds.find(m => m.chat_id === chatId && m.name === medName);
-    if (med) {
-      med.total_mg = data.new_total;
-      med.days_left = data.days_left;
-      const consumed = med.capacity_days - med.days_left;
-      med.progress = med.capacity_days > 0 ? Math.round(consumed / med.capacity_days * 100) : 0;
-    }
-    renderCards();
-    renderStats();
-  } catch(e) {
-    showToast('❌ ' + (e.message || 'Не удалось сохранить'));
-    btn.disabled = false;
-  } finally {
-    btn.classList.remove('loading');
-  }
-}
+    <!-- Floating Action Bar (декоративная) -->
+    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4">
+        <div class="glass h-16 rounded-full flex items-center justify-around px-8 shadow-2xl border-t border-white/10">
+            <button class="text-violet-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></button>
+            <button class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+            <button class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+        </div>
+    </div>
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function escHtml(s)  { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escAttr(s)  { return String(s).replace(/'/g,"\\'"); }
-function capitalize(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
+    <script>
+        // --- Глобальные переменные ---
+        let medsData = [];
+        let activeReminderName = null;
+        let isLoading = false;
 
-// ─── Init ────────────────────────────────────────────────────────────────────
-document.getElementById('refreshBtn').addEventListener('click', () => fetchMeds());
+        // --- DOM элементы ---
+        const medsContainer = document.getElementById('medsList');
+        const activeCountSpan = document.getElementById('activeCount');
+        const expiringCountSpan = document.getElementById('expiringCount');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const themeToggle = document.getElementById('themeToggle');
 
-// Auto-refresh every 60 s
-setInterval(() => fetchMeds(true), 60_000);
+        // --- Тёмная тема ---
+        function initTheme() {
+            const saved = localStorage.getItem('theme');
+            const isDark = saved === 'dark' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (isDark) document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+            updateThemeIcon();
+        }
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+            updateThemeIcon();
+        }
+        function updateThemeIcon() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const icon = document.getElementById('themeIcon');
+            if (isDark) {
+                icon.outerHTML = `<svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--text-primary)] group-hover:text-amber-400"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
+            } else {
+                icon.outerHTML = `<svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--text-primary)] group-hover:text-amber-400"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+            }
+        }
+        themeToggle.addEventListener('click', toggleTheme);
 
-// PWA service worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-}
+        // --- API вызовы ---
+        async function fetchMeds() {
+            try {
+                const res = await fetch('/api/meds');
+                if (!res.ok) throw new Error('Network error');
+                const data = await res.json();
+                medsData = data;
+                updateStats();
+                renderMeds();
+            } catch (err) {
+                console.error(err);
+                medsContainer.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Ошибка загрузки данных</div>';
+            }
+        }
 
-// First load
-fetchMeds();
-</script>
+        async function takeMed(chatId, medName) {
+            try {
+                const res = await fetch('/api/taken', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, med_name: medName })
+                });
+                if (res.ok) {
+                    await fetchMeds();
+                } else {
+                    alert('Не удалось отметить приём');
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function startCourse(chatId, medName) {
+            try {
+                const res = await fetch('/api/meds/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, med_name: medName })
+                });
+                if (res.ok) await fetchMeds();
+                else alert('Ошибка старта курса');
+            } catch (err) { console.error(err); }
+        }
+
+        async function deleteMed(chatId, medName) {
+            if (!confirm('Удалить это лекарство?')) return;
+            try {
+                const res = await fetch('/api/meds', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, med_name: medName })
+                });
+                if (res.ok) await fetchMeds();
+                else alert('Ошибка удаления');
+            } catch (err) { console.error(err); }
+        }
+
+        async function updateMed(chatId, medName, field, value) {
+            const body = field === 'dose' ? { daily_mg: value } : { add_stock: value };
+            try {
+                const res = await fetch('/api/meds/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, med_name: medName, ...body })
+                });
+                if (res.ok) await fetchMeds();
+                else alert('Ошибка обновления');
+            } catch (err) { console.error(err); }
+        }
+
+        // --- Вспомогательные ---
+        function updateStats() {
+            const active = medsData.filter(m => m.is_started).length;
+            const expiring = medsData.filter(m => m.days_left <= 7 && m.days_left > 0).length;
+            activeCountSpan.innerText = active;
+            expiringCountSpan.innerText = expiring;
+        }
+
+        function getFormIcon(form) {
+            const icons = {
+                tablets: '💊', capsules: '💊', drops: '💧', spray: '💨', liquid: '🧴', sachet: '📦'
+            };
+            return icons[form] || '💊';
+        }
+
+        function getFormColor(form) {
+            const colors = {
+                tablets: 'bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400',
+                capsules: 'bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400',
+                drops: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
+                spray: 'bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
+                liquid: 'bg-sky-100 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400',
+                sachet: 'bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'
+            };
+            return colors[form] || 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400';
+        }
+
+        // --- Рендер карточек ---
+        function renderMeds() {
+            if (!medsContainer) return;
+            if (medsData.length === 0) {
+                medsContainer.innerHTML = `
+                    <div class="text-center py-20">
+                        <div class="bg-[var(--surface-hover)] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--text-secondary)]/50"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                        </div>
+                        <p class="text-[var(--text-secondary)] font-medium">Лекарства не найдены.<br/>Добавьте их через бот.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            for (let med of medsData) {
+                const progress = med.progress || 0;
+                const progressColor = progress >= 80 ? 'from-red-500 via-rose-500 to-rose-600' : (progress >= 50 ? 'from-yellow-400 via-amber-500 to-orange-500' : 'from-green-300 via-green-500 to-emerald-500');
+                const icon = getFormIcon(med.form);
+                const formColor = getFormColor(med.form);
+                const isStarted = med.is_started;
+                const daysLeft = med.days_left;
+                const remainingDoses = med.remaining_doses?.toFixed(0) || 0;
+                const doseLabel = med.dose_label || 'мг';
+
+                html += `
+                    <div class="glass rounded-[2.5rem] p-6 relative overflow-hidden group hover:border-white/10 transition-colors">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-[1.5rem] flex items-center justify-center relative shadow-lg ${formColor} transition-all duration-300">
+                                    <div class="absolute inset-0 bg-white/10 dark:bg-transparent rounded-[1.5rem] pointer-events-none" style="background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 100%);"></div>
+                                    <div class="relative z-10 text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)] dark:drop-shadow-none">${icon}</div>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-lg text-[var(--text-primary)] group-hover:text-violet-500 transition-colors uppercase tracking-tight">${escapeHtml(med.name)}</h3>
+                                    <div class="flex items-center gap-2">
+                                        <p class="text-[var(--text-secondary)] text-sm font-medium">${med.dose_line || ''}</p>
+                                        <div class="w-1 h-1 rounded-full bg-[var(--text-secondary)]/30"></div>
+                                        <p class="text-[var(--text-secondary)] text-[11px] font-bold uppercase tracking-wider">${med.course_days === 0 ? 'Пожизненно' : `Курс: ${med.course_days} дн.`}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end gap-2">
+                                <button onclick="deleteMed('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="p-2 text-rose-500/60 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 4V3c0-1 1-2 2-2h4c1 0 2 1 2 2v1"/></svg>
+                                </button>
+                                <div class="flex flex-col items-end gap-1">
+                                    <div class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${daysLeft <= 7 ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">${daysLeft} дн. ост.</div>
+                                    ${isStarted ? '<div class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>КУРС НАЧАТ</div>' : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <div class="flex justify-between text-[11px] font-extrabold text-[var(--text-secondary)] uppercase tracking-widest mb-3">
+                                <span class="flex items-center gap-1.5 opacity-90">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+                                    ${med.course_days === 0 ? 'ЗАПАС ЛЕКАРСТВА' : 'ПРОГРЕСС КУРСА'}
+                                </span>
+                                <span class="text-sm ${progress >= 80 ? 'text-rose-500 font-black' : (progress >= 50 ? 'text-amber-500 font-black' : 'text-emerald-500 font-black')}">${progress}%</span>
+                            </div>
+                            <div class="h-6 w-full bg-slate-400/15 dark:bg-black/60 rounded-full overflow-hidden relative p-1 border border-black/[0.03] dark:border-white/5 shadow-inner transition-all">
+                                <div class="progress-bar h-full rounded-full bg-gradient-to-r ${progressColor} relative flex items-center justify-end pr-0.5" style="width: ${progress}%">
+                                    <div class="absolute inset-x-0 top-0 h-1/2 bg-white/20 rounded-t-full pointer-events-none"></div>
+                                    <div class="w-3 h-3 rounded-full bg-white/30 backdrop-blur-md border border-white/40 shadow-sm flex items-center justify-center shrink-0">
+                                        <div class="w-1 h-1 rounded-full bg-white/90 shadow-sm"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            ${progress >= 80 ? '<p class="text-[10px] font-bold text-rose-500 mt-2 uppercase tracking-tighter text-right">Запас почти исчерпан!</p>' : ''}
+                        </div>
+
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center gap-2 text-[var(--text-secondary)] text-xs font-bold btn-secondary px-4 py-2 rounded-2xl border border-white/10">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-violet-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                ${med.schedule || 'не указано'}
+                            </div>
+                            <div class="flex flex-col items-end gap-1">
+                                <div class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl transition-all duration-300 ${daysLeft <= 3 ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}">
+                                    Запас: ${remainingDoses} ${doseLabel}
+                                </div>
+                                ${med.course_days > 0 && progress < 100 && daysLeft >= Math.ceil(med.course_days * (1 - progress/100)) ? '<span class="text-[9px] font-bold text-emerald-500 uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500"></div>На курс хватит</span>' : ''}
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <button onclick="handleRefill('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-emerald-500 hover:border-emerald-500/20 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                                Пополнить
+                            </button>
+                            <button onclick="handleChangeDose('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-violet-500 hover:border-violet-500/20 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 2 2 0 0 1 0-2.36 1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 1.65 1.65 0 0 0-.33 1.82 2 2 0 0 1 0 2.36 1.65 1.65 0 0 0 .33 1.82 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 .33-1.82z"/></svg>
+                                Дозировка
+                            </button>
+                        </div>
+
+                        ${!isStarted ? `
+                            <button onclick="startCourse('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="w-full bg-emerald-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:bg-emerald-600 active:scale-95 transition-all shadow-lg shadow-emerald-500/20">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                Начать курс
+                            </button>
+                        ` : `
+                            <div class="space-y-3">
+                                <div class="flex gap-2">
+                                    <button onclick="takeMed('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" ${daysLeft <= 0 ? 'disabled' : ''} class="flex-1 bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl disabled:opacity-50">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                        Выпил
+                                    </button>
+                                    <button onclick="toggleReminder('${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex-1 bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        Напомнить позже
+                                    </button>
+                                </div>
+                                <div id="reminder-${med.name.replace(/[^a-zA-Z0-9]/g, '_')}" class="reminder-panel hidden">
+                                    <div class="grid grid-cols-2 gap-2 pt-2">
+                                        <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 10)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">10 мин</button>
+                                        <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 20)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">20 мин</button>
+                                        <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 30)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">30 мин</button>
+                                        <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 60)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">1 час</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `}
+                    </div>
+                `;
+            }
+            medsContainer.innerHTML = html;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
+        }
+
+        // --- Действия с напоминаниями (позже) ---
+        window.toggleReminder = function(medName) {
+            const panelId = `reminder-${medName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const panel = document.getElementById(panelId);
+            if (panel) panel.classList.toggle('hidden');
+        };
+        window.setReminderLater = function(chatId, medName, minutes) {
+            alert(`Напоминание через ${minutes} минут установлено (пока через alert, в реальности будет вызов бота)`);
+            // В реальном приложении здесь можно отправить запрос на сервер для отложенного напоминания через Telegram бота
+            const panel = document.getElementById(`reminder-${medName.replace(/[^a-zA-Z0-9]/g, '_')}`);
+            if (panel) panel.classList.add('hidden');
+        };
+
+        // --- Пополнение и дозировка ---
+        window.handleRefill = function(chatId, medName) {
+            let amount = prompt('Введите количество для пополнения (в единицах лекарства):');
+            if (amount && !isNaN(parseFloat(amount))) {
+                updateMed(chatId, medName, 'refill', parseFloat(amount));
+            } else if (amount) alert('Введите число');
+        };
+        window.handleChangeDose = function(chatId, medName) {
+            let dose = prompt('Введите новую суточную дозировку:');
+            if (dose && !isNaN(parseFloat(dose))) {
+                updateMed(chatId, medName, 'dose', parseFloat(dose));
+            } else if (dose) alert('Введите число');
+        };
+
+        // --- Обновление при загрузке и по кнопке ---
+        refreshBtn.addEventListener('click', () => {
+            refreshBtn.querySelector('svg').classList.add('animate-spin');
+            fetchMeds().finally(() => {
+                setTimeout(() => refreshBtn.querySelector('svg').classList.remove('animate-spin'), 500);
+            });
+        });
+
+        initTheme();
+        fetchMeds();
+    </script>
 </body>
 </html>
