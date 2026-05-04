@@ -291,6 +291,74 @@ async def add_medicine(req: AddMedRequest):
     await save_data(data)
     return {"ok": True, "message": f"Лекарство {req.name} добавлено"}
 
+# Добавьте эти эндпоинты в web_app.py после `/api/meds/add`
+
+class UpdateMedRequest(BaseModel):
+    chat_id: str
+    med_name: str
+    daily_mg: float = None
+    add_stock: float = None
+
+class StartCourseRequest(BaseModel):
+    chat_id: str
+    med_name: str
+
+class DeleteMedRequest(BaseModel):
+    chat_id: str
+    med_name: str
+
+@app.post("/api/meds/update")
+async def update_med(req: UpdateMedRequest):
+    """Обновить дозировку или пополнить запас"""
+    data = load_data()
+    chat_id = str(req.chat_id)
+
+    if chat_id not in data or req.med_name not in data[chat_id]:
+        raise HTTPException(status_code=404, detail="Лекарство не найдено")
+
+    med = data[chat_id][req.med_name]
+
+    if req.daily_mg is not None:
+        med["daily_mg"] = req.daily_mg
+
+    if req.add_stock is not None:
+        med["total_mg"] += req.add_stock
+        med["notified"] = False
+
+    await save_data(data)
+    return {"ok": True}
+
+@app.post("/api/meds/start")
+async def start_course(req: StartCourseRequest):
+    """Начать курс лекарства"""
+    data = load_data()
+    chat_id = str(req.chat_id)
+
+    if chat_id not in data or req.med_name not in data[chat_id]:
+        raise HTTPException(status_code=404, detail="Лекарство не найдено")
+
+    med = data[chat_id][req.med_name]
+    med["is_started"] = True
+    med["start_date"] = get_now().isoformat()
+    await save_data(data)
+
+    return {"ok": True}
+
+@app.delete("/api/meds")
+async def delete_med(req: DeleteMedRequest):
+    """Удалить лекарство"""
+    data = load_data()
+    chat_id = str(req.chat_id)
+
+    if chat_id not in data or req.med_name not in data[chat_id]:
+        raise HTTPException(status_code=404, detail="Лекарство не найдено")
+
+    del data[chat_id][req.med_name]
+    if len(data[chat_id]) == 0:
+        del data[chat_id]
+
+    await save_data(data)
+    return {"ok": True}
 
 @app.post("/api/meds/start")
 async def start_course(req: StartCourseRequest):
