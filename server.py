@@ -4,12 +4,16 @@ from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 import pytz
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ================== КОНФИГУРАЦИЯ ==================
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
@@ -21,7 +25,7 @@ DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
 if not DATA_FILE.parent.exists():
     DATA_FILE = Path("meds_data.json")
 
-print(f"📁 Server использует файл данных: {DATA_FILE.absolute()}")
+logger.info(f"📁 Server использует файл данных: {DATA_FILE.absolute()}")
 
 app = FastAPI()
 
@@ -63,7 +67,7 @@ def get_now():
 def load_data_store():
     """Загружает данные из ТОГО ЖЕ файла, что и бот"""
     if not DATA_FILE.exists():
-        print(f"⚠️ Файл данных не найден: {DATA_FILE}")
+        logger.warning(f"⚠️ Файл данных не найден: {DATA_FILE}")
         return {}
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
@@ -71,26 +75,24 @@ def load_data_store():
             if not content:
                 return {}
             raw = json.loads(content)
-            # Преобразуем ключи chat_id в int
             return {int(k): v for k, v in raw.items()}
     except json.JSONDecodeError as e:
-        print(f"❌ Ошибка парсинга JSON: {e}")
+        logger.error(f"❌ Ошибка парсинга JSON: {e}")
         return {}
     except Exception as e:
-        print(f"❌ Ошибка загрузки данных: {e}")
+        logger.error(f"❌ Ошибка загрузки данных: {e}")
         return {}
 
 def save_data_store(data_store):
     """Сохраняет данные в ТОТ ЖЕ файл, что и бот"""
     try:
-        # Преобразуем chat_id в строки для JSON
         serializable = {str(k): v for k, v in data_store.items()}
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(serializable, f, ensure_ascii=False, indent=2)
-        print(f"💾 Данные сохранены в {DATA_FILE}")
+        logger.info(f"💾 Данные сохранены в {DATA_FILE}")
         return True
     except Exception as e:
-        print(f"❌ Ошибка сохранения: {e}")
+        logger.error(f"❌ Ошибка сохранения: {e}")
         return False
 
 def calc_days_left(med):
@@ -161,6 +163,7 @@ def calculate_progress(med):
 @app.get("/api/meds")
 async def get_meds(chat_id: Optional[int] = None):
     """Получить все лекарства"""
+    logger.info("GET /api/meds called")
     data_store = load_data_store()
     
     if chat_id is None:
@@ -195,15 +198,18 @@ async def get_meds(chat_id: Optional[int] = None):
             "dose_line": f"{med.get('daily_mg', 0)} {dose_label}/сут"
         })
     
+    logger.info(f"Returning {len(result)} medicines")
     return result
 
 @app.post("/api/meds/add")
 async def add_medicine(req: AddMedicineRequest):
     """Добавить новое лекарство"""
+    logger.info(f"POST /api/meds/add called with: {req.name}, {req.form}")
     try:
         data_store = load_data_store()
         chat_id = 1
         
+        # Пересчёт общего запаса
         if req.form == "drops":
             total_resource = (req.unit_mg / 0.05) * req.units
         elif req.form == "spray":
@@ -211,9 +217,14 @@ async def add_medicine(req: AddMedicineRequest):
         else:
             total_resource = req.unit_mg * req.units
         
+        logger.info(f"Total resource calculated: {total_resource}")
+        
+        # Проверяем, не существует ли уже лекарство
         if req.name in data_store.get(chat_id, {}):
+            logger.warning(f"Medicine {req.name} already exists")
             raise HTTPException(status_code=400, detail="Лекарство с таким названием уже существует")
         
+        # Создаем запись
         data_store.setdefault(chat_id, {})[req.name] = {
             "form": req.form,
             "daily_mg": req.daily_mg,
@@ -229,22 +240,25 @@ async def add_medicine(req: AddMedicineRequest):
             "last_9am_key": None,
         }
         
+        # Сохраняем
         if save_data_store(data_store):
             days = calc_days_left(data_store[chat_id][req.name])
-            print(f"✅ Добавлено лекарство: {req.name}, хватит на {days} дней")
+            logger.info(f"✅ Added medicine: {req.name}, lasts {days} days")
             return {"success": True, "message": f"Лекарство добавлено! Хватит на {days} дней", "name": req.name}
         else:
+            logger.error("Failed to save data")
             raise HTTPException(status_code=500, detail="Ошибка сохранения данных")
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Ошибка добавления: {e}")
+        logger.error(f"Error adding medicine: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/meds/update")
 async def update_medicine(req: UpdateMedicineRequest):
     """Обновить дозировку или пополнить запас"""
+    logger.info(f"POST /api/meds/update called for {req.med_name}")
     try:
         data_store = load_data_store()
         
@@ -282,12 +296,13 @@ async def update_medicine(req: UpdateMedicineRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Ошибка обновления: {e}")
+        logger.error(f"Error updating medicine: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/meds/start")
 async def start_course(req: StartCourseRequest):
     """Начать курс лекарства"""
+    logger.info(f"POST /api/meds/start called for {req.med_name}")
     try:
         data_store = load_data_store()
         
@@ -308,12 +323,13 @@ async def start_course(req: StartCourseRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Ошибка старта курса: {e}")
+        logger.error(f"Error starting course: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/taken")
 async def mark_taken(req: TakenRequest):
     """Отметить приём лекарства"""
+    logger.info(f"POST /api/taken called for {req.med_name}")
     try:
         data_store = load_data_store()
         
@@ -335,12 +351,13 @@ async def mark_taken(req: TakenRequest):
         return {"success": True, "message": "Приём отмечен"}
         
     except Exception as e:
-        print(f"❌ Ошибка отметки приёма: {e}")
+        logger.error(f"Error marking taken: {e}")
         return {"success": True, "message": "Приём отмечен"}
 
 @app.delete("/api/meds")
 async def delete_medicine(chat_id: int, med_name: str):
     """Удалить лекарство"""
+    logger.info(f"DELETE /api/meds called for {med_name}")
     try:
         data_store = load_data_store()
         
@@ -355,7 +372,7 @@ async def delete_medicine(chat_id: int, med_name: str):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Ошибка удаления: {e}")
+        logger.error(f"Error deleting medicine: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
@@ -363,16 +380,20 @@ async def health_check():
     """Проверка работоспособности"""
     return {"status": "ok", "data_file": str(DATA_FILE), "exists": DATA_FILE.exists()}
 
+@app.get("/test")
+async def test():
+    """Тестовый эндпоинт"""
+    return {"message": "Server is working!"}
+
 # ================== ГЛАВНАЯ СТРАНИЦА ==================
 @app.get("/")
 async def root():
     """Возвращает главную страницу"""
-    # Пытаемся найти index.html в текущей директории
     index_path = Path(__file__).parent / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
     else:
-        return {"status": "ok", "service": "MedTracker API", "version": "1.0", "message": "Index.html not found"}
+        return {"status": "ok", "service": "MedTracker API", "version": "1.0"}
 
 # ================== ЗАПУСК ==================
 def run_server():
@@ -385,6 +406,7 @@ def run_server():
     print(f"📄 HTML файл: {Path(__file__).parent / 'index.html'}")
     print(f"🌐 Адрес: http://{host}:{port}")
     print(f"📊 Health check: http://{host}:{port}/health")
+    print(f"🧪 Test endpoint: http://{host}:{port}/test")
     print(f"{'='*50}\n")
     
     uvicorn.run(app, host=host, port=port, log_level="info")
