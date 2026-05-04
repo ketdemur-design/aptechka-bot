@@ -578,7 +578,7 @@ async def save_medicine(update_or_query, chat_id):
 
     msg = f"✅ Лекарство *{d['name']}* успешно добавлено!\n\n"
     if form in ("drops", "spray", "liquid"):
-        msg += f"Объем флакона/ед: {unit_mg:g} мл\n"
+        msg += f"Объем: {unit_mg:g} мл\n"
     else:
         msg += f"Дозировка ед: {unit_mg:g} мг\n"
     msg += (
@@ -587,11 +587,23 @@ async def save_medicine(update_or_query, chat_id):
         "⚠️ Нажмите «▶️ Начать курс» для старта отсчёта."
     )
 
-    if hasattr(update_or_query, 'reply_text'):
-        await update_or_query.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
-    else:
-        await update_or_query.edit_message_text(msg, parse_mode="Markdown")
-        await update_or_query.message.reply_text("Главное меню:", reply_markup=main_menu())
+    # ПРАВИЛЬНАЯ отправка сообщения
+    try:
+        # Если это Message от text_handler
+        if hasattr(update_or_query, 'message') and hasattr(update_or_query.message, 'reply_text'):
+            await update_or_query.message.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
+        # Если это CallbackQuery
+        elif hasattr(update_or_query, 'edit_message_text'):
+            await update_or_query.edit_message_text(msg, parse_mode="Markdown")
+            await update_or_query.message.reply_text("Главное меню:", reply_markup=main_menu())
+        else:
+            # fallback
+            print("Не удалось отправить сообщение")
+    except Exception as e:
+        print(f"Ошибка отправки сообщения: {e}")
+        # Пробуем альтернативный способ
+        if hasattr(update_or_query, 'message'):
+            await update_or_query.message.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
 
     user_states.pop(chat_id, None)
 
