@@ -6,22 +6,17 @@
     <title>Моя Аптечка</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Все стили из предыдущей версии (оставьте без изменений) */
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-        
-        * {
-            font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
-        }
-        
+        * { font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; }
         body {
             background: var(--bg);
             color: var(--text-primary);
             transition: background-color 0.3s ease, color 0.3s ease;
-            background-image: 
-                radial-gradient(circle at 100% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
-                radial-gradient(circle at 0% 100%, rgba(168, 85, 247, 0.1) 0%, transparent 50%);
+            background-image: radial-gradient(circle at 100% 0%, rgba(99,102,241,0.15) 0%, transparent 50%),
+                              radial-gradient(circle at 0% 100%, rgba(168,85,247,0.1) 0%, transparent 50%);
             background-attachment: fixed;
         }
-
         :root {
             --bg: #e2e8f0;
             --surface: #ffffff;
@@ -30,7 +25,6 @@
             --text-primary: #0f172a;
             --text-secondary: #475569;
         }
-
         .dark {
             --bg: #090b11;
             --surface: #1a1f2e;
@@ -39,7 +33,6 @@
             --text-primary: #ffffff;
             --text-secondary: #94a3b8;
         }
-
         .glass {
             background: var(--surface);
             backdrop-filter: blur(12px);
@@ -50,12 +43,8 @@
             background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.8) 100%);
             border-color: rgba(255,255,255,0.1);
         }
-        .card-shadow {
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05);
-        }
-        .dark .card-shadow {
-            box-shadow: 0 20px 40px -12px rgba(0,0,0,0.5);
-        }
+        .card-shadow { box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05); }
+        .dark .card-shadow { box-shadow: 0 20px 40px -12px rgba(0,0,0,0.5); }
         .shimmer {
             background: linear-gradient(90deg, transparent, rgba(139,92,246,0.05), transparent);
             background-size: 200% 100%;
@@ -68,20 +57,30 @@
         .progress-bar {
             transition: width 0.8s cubic-bezier(0.2, 0.9, 0.4, 1.1);
         }
-        .animate-pulse-slow {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        .btn-secondary { background-color: var(--btn-secondary); }
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
         }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .btn-secondary {
-            background-color: var(--btn-secondary);
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--surface);
+            border-radius: 2rem;
+            max-width: 90%;
+            width: 400px;
+            padding: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
         }
     </style>
 </head>
 <body class="pb-20 px-4 pt-8 max-w-lg mx-auto">
-    <!-- Header -->
     <header class="flex items-center justify-between mb-10">
         <div>
             <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)] bg-clip-text text-transparent">
@@ -91,20 +90,19 @@
         </div>
         <div class="flex items-center gap-2">
             <button id="themeToggle" class="p-2.5 glass rounded-2xl hover:bg-[var(--surface-hover)] transition-colors group">
-                <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--text-primary)] group-hover:text-amber-400"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             </button>
             <button id="refreshBtn" class="p-2.5 glass rounded-2xl hover:bg-[var(--surface-hover)] transition-colors group">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--text-primary)] group-hover:text-violet-400 transition-all"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
             </button>
         </div>
     </header>
 
-    <!-- Stats Summary -->
     <div class="grid grid-cols-2 gap-4 mb-8">
         <div class="glass p-5 rounded-[2rem] card-shadow">
             <div class="flex items-center gap-3 mb-2">
                 <div class="p-2 bg-emerald-400/10 rounded-xl text-emerald-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                 </div>
                 <span class="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-wider">Активные</span>
             </div>
@@ -113,7 +111,7 @@
         <div class="glass p-5 rounded-[2rem] card-shadow">
             <div class="flex items-center gap-3 mb-2">
                 <div class="p-2 bg-amber-400/10 rounded-xl text-amber-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
                 </div>
                 <span class="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-wider">Заканчиваются</span>
             </div>
@@ -121,16 +119,48 @@
         </div>
     </div>
 
-    <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-6 pl-2">Текущий график</h2>
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] pl-2">Текущий график</h2>
+        <button id="addMedBtn" class="bg-violet-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-1 shadow-lg hover:bg-violet-700 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Добавить
+        </button>
+    </div>
 
-    <!-- Medications List -->
     <div id="medsList" class="space-y-4"></div>
 
-    <!-- Floating Action Bar -->
+    <!-- Модальное окно добавления лекарства -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Новое лекарство</h3>
+            <form id="addMedForm">
+                <input type="text" id="medName" placeholder="Название" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10" required>
+                <select id="medForm" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10">
+                    <option value="tablets">Таблетки</option>
+                    <option value="capsules">Капсулы</option>
+                    <option value="drops">Капли</option>
+                    <option value="spray">Спрей</option>
+                    <option value="liquid">Жидкость</option>
+                    <option value="sachet">Саше</option>
+                </select>
+                <input type="number" step="any" id="medUnitMg" placeholder="Мг в одной единице (или мл)" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10" required>
+                <input type="number" id="medUnits" placeholder="Количество единиц" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10" required>
+                <input type="number" step="any" id="medDailyMg" placeholder="Суточная дозировка (мг/капли/мл)" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10" required>
+                <input type="number" id="medCourseDays" placeholder="Длительность курса (дней, 0 = пожизненно)" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
+                <div class="flex gap-3">
+                    <button type="submit" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Сохранить</button>
+                    <button type="button" id="closeModalBtn" class="flex-1 bg-rose-600 text-white py-3 rounded-xl font-bold">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Floating Action Bar (декоративная) -->
     <div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4">
         <div class="glass h-16 rounded-full flex items-center justify-around px-8 shadow-2xl border-t border-white/10">
-            <button id="calendarBtn" class="text-violet-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
-            <button id="clockBtn" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+            <button class="text-violet-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></button>
+            <button class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+            <button class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
         </div>
     </div>
 
@@ -143,8 +173,11 @@
         const expiringCountSpan = document.getElementById('expiringCount');
         const refreshBtn = document.getElementById('refreshBtn');
         const themeToggle = document.getElementById('themeToggle');
+        const addMedBtn = document.getElementById('addMedBtn');
+        const addModal = document.getElementById('addModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const addMedForm = document.getElementById('addMedForm');
 
-        // Тёмная тема
         function initTheme() {
             const saved = localStorage.getItem('theme');
             const isDark = saved === 'dark' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -168,18 +201,10 @@
         }
         themeToggle.addEventListener('click', toggleTheme);
 
-        // Кнопки календарь и часики
-        document.getElementById('calendarBtn').addEventListener('click', () => {
-            alert('📅 Календарь приёма\nНастройте напоминания через Telegram бота');
-        });
-        document.getElementById('clockBtn').addEventListener('click', () => {
-            alert('⏰ Напоминания\nНастройте время приёма через Telegram бота');
-        });
-
         // API вызовы
         async function fetchMeds() {
             try {
-                const res = await fetch('/api/meds');
+                const res = await fetch('/api/meds', { cache: 'no-store' });
                 if (!res.ok) throw new Error('Network error');
                 medsData = await res.json();
                 updateStats();
@@ -197,11 +222,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chat_id: chatId, med_name: medName })
                 });
-                if (res.ok) {
-                    await fetchMeds();
-                } else {
-                    alert('Не удалось отметить приём');
-                }
+                if (res.ok) await fetchMeds();
+                else alert('Не удалось отметить приём');
             } catch (err) { console.error(err); }
         }
 
@@ -243,7 +265,48 @@
             } catch (err) { console.error(err); }
         }
 
-        // Вспомогательные
+        // Добавление лекарства через веб
+        async function addMedicine(medData) {
+            try {
+                const res = await fetch('/api/meds/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(medData)
+                });
+                if (res.ok) {
+                    await fetchMeds();
+                    addModal.classList.remove('active');
+                    addMedForm.reset();
+                } else {
+                    const err = await res.json();
+                    alert('Ошибка: ' + (err.error || 'неизвестная'));
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Ошибка соединения');
+            }
+        }
+
+        addMedBtn.addEventListener('click', () => addModal.classList.add('active'));
+        closeModalBtn.addEventListener('click', () => addModal.classList.remove('active'));
+        addModal.addEventListener('click', (e) => { if (e.target === addModal) addModal.classList.remove('active'); });
+        addMedForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('medName').value.trim();
+            if (!name) return;
+            const form = document.getElementById('medForm').value;
+            const unit_mg = parseFloat(document.getElementById('medUnitMg').value);
+            const units = parseInt(document.getElementById('medUnits').value);
+            const daily_mg = parseFloat(document.getElementById('medDailyMg').value);
+            let course_days = parseInt(document.getElementById('medCourseDays').value);
+            if (isNaN(course_days)) course_days = 0;
+            if (isNaN(unit_mg) || isNaN(units) || isNaN(daily_mg)) {
+                alert('Заполните все поля числами');
+                return;
+            }
+            addMedicine({ name, form, unit_mg, units, daily_mg, course_days });
+        });
+
         function updateStats() {
             const active = medsData.filter(m => m.is_started).length;
             const expiring = medsData.filter(m => m.days_left <= 7 && m.days_left > 0).length;
@@ -268,28 +331,10 @@
             return colors[form] || 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400';
         }
 
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
-        }
-
-        // Рендер карточек
         function renderMeds() {
             if (!medsContainer) return;
             if (medsData.length === 0) {
-                medsContainer.innerHTML = `
-                    <div class="text-center py-20">
-                        <div class="bg-[var(--surface-hover)] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--text-secondary)]/50"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-                        </div>
-                        <p class="text-[var(--text-secondary)] font-medium">Лекарства не найдены.<br/>Добавьте их через бот.</p>
-                    </div>
-                `;
+                medsContainer.innerHTML = `<div class="text-center py-20"><div class="bg-[var(--surface-hover)] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--text-secondary)]/50"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></div><p class="text-[var(--text-secondary)] font-medium">Лекарства не найдены.<br/>Добавьте их через бот или кнопку «Добавить».</p></div>`;
                 return;
             }
 
@@ -304,151 +349,123 @@
                 const remainingDoses = med.remaining_doses?.toFixed(0) || 0;
                 const doseLabel = med.dose_label || 'мг';
 
-                html += `
-                    <div class="glass rounded-[2.5rem] p-6 relative overflow-hidden group hover:border-white/10 transition-colors">
-                        <div class="flex items-start justify-between mb-4">
-                            <div class="flex items-center gap-4">
-                                <div class="w-14 h-14 rounded-[1.5rem] flex items-center justify-center relative shadow-lg ${formColor} transition-all duration-300">
-                                    <div class="absolute inset-0 bg-white/10 dark:bg-transparent rounded-[1.5rem] pointer-events-none" style="background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 100%);"></div>
-                                    <div class="relative z-10 text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)] dark:drop-shadow-none">${icon}</div>
-                                </div>
-                                <div>
-                                    <h3 class="font-bold text-lg text-[var(--text-primary)] group-hover:text-violet-500 transition-colors uppercase tracking-tight">${escapeHtml(med.name)}</h3>
-                                    <div class="flex items-center gap-2">
-                                        <p class="text-[var(--text-secondary)] text-sm font-medium">${med.dose_line || ''}</p>
-                                        <div class="w-1 h-1 rounded-full bg-[var(--text-secondary)]/30"></div>
-                                        <p class="text-[var(--text-secondary)] text-[11px] font-bold uppercase tracking-wider">${med.course_days === 0 ? 'Пожизненно' : `Курс: ${med.course_days} дн.`}</p>
-                                    </div>
-                                </div>
+                html += `<div class="glass rounded-[2.5rem] p-6 relative overflow-hidden group hover:border-white/10 transition-colors">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-[1.5rem] flex items-center justify-center relative shadow-lg ${formColor} transition-all duration-300">
+                                <div class="absolute inset-0 bg-white/10 dark:bg-transparent rounded-[1.5rem] pointer-events-none" style="background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 100%);"></div>
+                                <div class="relative z-10 text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)] dark:drop-shadow-none">${icon}</div>
                             </div>
-                            <div class="flex flex-col items-end gap-2">
-                                <button onclick="deleteMed('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="p-2 text-rose-500/60 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 4V3c0-1 1-2 2-2h4c1 0 2 1 2 2v1"/></svg>
-                                </button>
-                                <div class="flex flex-col items-end gap-1">
-                                    <div class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${daysLeft <= 7 ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">${daysLeft} дн. ост.</div>
-                                    ${isStarted ? '<div class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>КУРС НАЧАТ</div>' : ''}
+                            <div>
+                                <h3 class="font-bold text-lg text-[var(--text-primary)] group-hover:text-violet-500 transition-colors uppercase tracking-tight">${escapeHtml(med.name)}</h3>
+                                <div class="flex items-center gap-2">
+                                    <p class="text-[var(--text-secondary)] text-sm font-medium">${med.dose_line || ''}</p>
+                                    <div class="w-1 h-1 rounded-full bg-[var(--text-secondary)]/30"></div>
+                                    <p class="text-[var(--text-secondary)] text-[11px] font-bold uppercase tracking-wider">${med.course_days === 0 ? 'Пожизненно' : `Курс: ${med.course_days} дн.`}</p>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="mb-6">
-                            <div class="flex justify-between text-[11px] font-extrabold text-[var(--text-secondary)] uppercase tracking-widest mb-3">
-                                <span class="flex items-center gap-1.5 opacity-90">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
-                                    ${med.course_days === 0 ? 'ЗАПАС ЛЕКАРСТВА' : 'ПРОГРЕСС КУРСА'}
-                                </span>
-                                <span class="text-sm ${progress >= 80 ? 'text-rose-500 font-black' : (progress >= 50 ? 'text-amber-500 font-black' : 'text-emerald-500 font-black')}">${progress}%</span>
-                            </div>
-                            <div class="h-6 w-full bg-slate-400/15 dark:bg-black/60 rounded-full overflow-hidden relative p-1 border border-black/[0.03] dark:border-white/5 shadow-inner transition-all">
-                                <div class="progress-bar h-full rounded-full bg-gradient-to-r ${progressColor} relative flex items-center justify-end pr-0.5" style="width: ${progress}%">
-                                    <div class="absolute inset-x-0 top-0 h-1/2 bg-white/20 rounded-t-full pointer-events-none"></div>
-                                    <div class="w-3 h-3 rounded-full bg-white/30 backdrop-blur-md border border-white/40 shadow-sm flex items-center justify-center shrink-0">
-                                        <div class="w-1 h-1 rounded-full bg-white/90 shadow-sm"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            ${progress >= 80 ? '<p class="text-[10px] font-bold text-rose-500 mt-2 uppercase tracking-tighter text-right">Запас почти исчерпан!</p>' : ''}
-                        </div>
-
-                        <div class="flex items-center justify-between mb-6">
-                            <div class="flex items-center gap-2 text-[var(--text-secondary)] text-xs font-bold btn-secondary px-4 py-2 rounded-2xl border border-white/10">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-violet-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                ${med.schedule || 'не указано'}
-                            </div>
+                        <div class="flex flex-col items-end gap-2">
+                            <button onclick="deleteMed('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="p-2 text-rose-500/60 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 4V3c0-1 1-2 2-2h4c1 0 2 1 2 2v1"/></svg>
+                            </button>
                             <div class="flex flex-col items-end gap-1">
-                                <div class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl transition-all duration-300 ${daysLeft <= 3 ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}">
-                                    Запас: ${remainingDoses} ${doseLabel}
-                                </div>
-                                ${med.course_days > 0 && progress < 100 && daysLeft >= Math.ceil(med.course_days * (1 - progress/100)) ? '<span class="text-[9px] font-bold text-emerald-500 uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500"></div>На курс хватит</span>' : ''}
+                                <div class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${daysLeft <= 7 ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">${daysLeft} дн. ост.</div>
+                                ${isStarted ? '<div class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>КУРС НАЧАТ</div>' : ''}
                             </div>
                         </div>
-
-                        <div class="grid grid-cols-2 gap-3 mb-4">
-                            <button onclick="handleRefill('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-emerald-500 hover:border-emerald-500/20 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                                Пополнить
-                            </button>
-                            <button onclick="handleChangeDose('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-violet-500 hover:border-violet-500/20 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 2 2 0 0 1 0-2.36 1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 1.65 1.65 0 0 0-.33 1.82 2 2 0 0 1 0 2.36 1.65 1.65 0 0 0 .33 1.82 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 .33-1.82z"/></svg>
-                                Дозировка
-                            </button>
-                        </div>
-
-                        ${!isStarted ? `
-                            <button onclick="startCourse('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="w-full bg-emerald-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:bg-emerald-600 active:scale-95 transition-all shadow-lg shadow-emerald-500/20">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                Начать курс
-                            </button>
-                        ` : `
-                            <div class="space-y-3">
-                                <div class="flex gap-2">
-                                    <button onclick="takeMed('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" ${daysLeft <= 0 ? 'disabled' : ''} class="flex-1 bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl disabled:opacity-50">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                                        Выпил
-                                    </button>
-                                    <button onclick="toggleReminder('${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex-1 bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                        Напомнить позже
-                                    </button>
-                                </div>
-                                <div id="reminder-${med.name.replace(/[^a-zA-Z0-9]/g, '_')}" class="reminder-panel hidden">
-                                    <div class="grid grid-cols-2 gap-2 pt-2">
-                                        <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 10)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">10 мин</button>
-                                        <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 20)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">20 мин</button>
-                                        <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 30)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">30 мин</button>
-                                        <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 60)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">1 час</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `}
                     </div>
-                `;
+                    <div class="mb-6">
+                        <div class="flex justify-between text-[11px] font-extrabold text-[var(--text-secondary)] uppercase tracking-widest mb-3">
+                            <span class="flex items-center gap-1.5 opacity-90"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>${med.course_days === 0 ? 'ЗАПАС ЛЕКАРСТВА' : 'ПРОГРЕСС КУРСА'}</span>
+                            <span class="text-sm ${progress >= 80 ? 'text-rose-500 font-black' : (progress >= 50 ? 'text-amber-500 font-black' : 'text-emerald-500 font-black')}">${progress}%</span>
+                        </div>
+                        <div class="h-6 w-full bg-slate-400/15 dark:bg-black/60 rounded-full overflow-hidden relative p-1 border border-black/[0.03] dark:border-white/5 shadow-inner transition-all">
+                            <div class="progress-bar h-full rounded-full bg-gradient-to-r ${progressColor} relative flex items-center justify-end pr-0.5" style="width: ${progress}%">
+                                <div class="absolute inset-x-0 top-0 h-1/2 bg-white/20 rounded-t-full pointer-events-none"></div>
+                                <div class="w-3 h-3 rounded-full bg-white/30 backdrop-blur-md border border-white/40 shadow-sm flex items-center justify-center shrink-0"><div class="w-1 h-1 rounded-full bg-white/90 shadow-sm"></div></div>
+                            </div>
+                        </div>
+                        ${progress >= 80 ? '<p class="text-[10px] font-bold text-rose-500 mt-2 uppercase tracking-tighter text-right">Запас почти исчерпан!</p>' : ''}
+                    </div>
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-2 text-[var(--text-secondary)] text-xs font-bold btn-secondary px-4 py-2 rounded-2xl border border-white/10">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-violet-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            ${med.schedule || 'не указано'}
+                        </div>
+                        <div class="flex flex-col items-end gap-1">
+                            <div class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl transition-all duration-300 ${daysLeft <= 3 ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}">Запас: ${remainingDoses} ${doseLabel}</div>
+                            ${med.course_days > 0 && progress < 100 && daysLeft >= Math.ceil(med.course_days * (1 - progress/100)) ? '<span class="text-[9px] font-bold text-emerald-500 uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500"></div>На курс хватит</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <button onclick="handleRefill('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-emerald-500 hover:border-emerald-500/20 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Пополнить
+                        </button>
+                        <button onclick="handleChangeDose('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-violet-500 hover:border-violet-500/20 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 2 2 0 0 1 0-2.36 1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 1.65 1.65 0 0 0-.33 1.82 2 2 0 0 1 0 2.36 1.65 1.65 0 0 0 .33 1.82 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 .33-1.82z"/></svg>Дозировка
+                        </button>
+                    </div>
+                    ${!isStarted ? `<button onclick="startCourse('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="w-full bg-emerald-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:bg-emerald-600 active:scale-95 transition-all shadow-lg shadow-emerald-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Начать курс</button>` : `
+                        <div class="space-y-3">
+                            <div class="flex gap-2">
+                                <button onclick="takeMed('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" ${daysLeft <= 0 ? 'disabled' : ''} class="flex-1 bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl disabled:opacity-50"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Выпил</button>
+                                <button onclick="toggleReminder('${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex-1 bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Напомнить позже</button>
+                            </div>
+                            <div id="reminder-${med.name.replace(/[^a-zA-Z0-9]/g, '_')}" class="reminder-panel hidden"><div class="grid grid-cols-2 gap-2 pt-2">
+                                <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 10)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">10 мин</button>
+                                <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 20)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">20 мин</button>
+                                <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 30)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">30 мин</button>
+                                <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 60)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">1 час</button>
+                            </div></div>
+                        </div>`}
+                </div>`;
             }
             medsContainer.innerHTML = html;
         }
 
-        // Действия
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
         window.toggleReminder = function(medName) {
             const panelId = `reminder-${medName.replace(/[^a-zA-Z0-9]/g, '_')}`;
             const panel = document.getElementById(panelId);
             if (panel) panel.classList.toggle('hidden');
         };
-        
         window.setReminderLater = function(chatId, medName, minutes) {
-            alert(`⏰ Напоминание через ${minutes} минут\n(будет отправлено Telegram-ботом)`);
+            alert(`Напоминание через ${minutes} минут установлено (в реальном приложении будет отправлено Telegram-ботом)`);
             const panel = document.getElementById(`reminder-${medName.replace(/[^a-zA-Z0-9]/g, '_')}`);
             if (panel) panel.classList.add('hidden');
         };
-        
         window.handleRefill = function(chatId, medName) {
             let amount = prompt('Введите количество для пополнения (в единицах лекарства):');
-            if (amount && !isNaN(parseFloat(amount))) {
-                updateMed(chatId, medName, 'refill', parseFloat(amount));
-            } else if (amount) alert('Введите число');
+            if (amount && !isNaN(parseFloat(amount))) updateMed(chatId, medName, 'refill', parseFloat(amount));
+            else if (amount) alert('Введите число');
         };
-        
         window.handleChangeDose = function(chatId, medName) {
             let dose = prompt('Введите новую суточную дозировку:');
-            if (dose && !isNaN(parseFloat(dose))) {
-                updateMed(chatId, medName, 'dose', parseFloat(dose));
-            } else if (dose) alert('Введите число');
+            if (dose && !isNaN(parseFloat(dose))) updateMed(chatId, medName, 'dose', parseFloat(dose));
+            else if (dose) alert('Введите число');
         };
-        
         window.deleteMed = deleteMed;
         window.startCourse = startCourse;
         window.takeMed = takeMed;
 
         refreshBtn.addEventListener('click', () => {
             refreshBtn.querySelector('svg').classList.add('animate-spin');
-            fetchMeds().finally(() => {
-                setTimeout(() => refreshBtn.querySelector('svg').classList.remove('animate-spin'), 500);
-            });
+            fetchMeds().finally(() => setTimeout(() => refreshBtn.querySelector('svg').classList.remove('animate-spin'), 500));
         });
 
         initTheme();
         fetchMeds();
-        setInterval(fetchMeds, 30000);
+        setInterval(fetchMeds, 30000); // автообновление каждые 30 секунд
     </script>
 </body>
 </html>
