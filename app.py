@@ -17,7 +17,7 @@ from telegram.ext import (
 
 # ================== КОНФИГУРАЦИЯ ==================
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.28"
+BOT_VERSION = "1.1.29"
 DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -689,4 +689,69 @@ async def reminder_loop(application):
                     if t_dict.get(current_weekday):
                         times_to_check.extend(t_dict[current_weekday])
                     times_for_today = set(times_to_check)
-                   
+                    if current_time_str in times_for_today:
+                        reminder_key = f"{now_msk.date().isoformat()}:{current_time_str}:{name}"
+                        if m.get("last_reminder_key") == reminder_key:
+                            continue
+                        _, dose_label = get_display_units(m)
+                        doses_count = len(times_for_today)
+                        per_dose = m["daily_mg"] / doses_count if doses_count > 0 else m["daily_mg"]
+                        await application.bot.send_message(
+                            chat_id,
+                            f"⏰ Время принимать лекарство: {name}\nДозировка: {per_dose:g} {dose_label}",
+                            reply_markup=reminder_action_menu(name)
+                        )
+                        m["last_reminder_key"] = reminder_key
+                        save_data_store()
+                    if now_msk.hour == 9 and now_msk.minute == 0:
+                        r_key_9am = f"{now_msk.date().isoformat()}:09am:{name}"
+                        if m.get("last_9am_key") != r_key_9am:
+                            days = calc_days_left(m)
+                            if 0 < days <= 7 and not m.get("notified"):
+                                await application.bot.send_message(chat_id, f"🛒 Заканчивается {name}\nХватит на: {days} дн.\nПора купить 💊")
+                                m["notified"] = True
+                            m["last_9am_key"] = r_key_9am
+                            save_data_store()
+                    if now_msk.hour == 0 and now_msk.minute == 0:
+                        m["notified"] = False
+        except Exception as e:
+            print(f"Ошибка в цикле напоминаний: {e}")
+        await asyncio.sleep(30)
+
+async def send_delayed_reminder(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    med_name = job.data["med_name"]
+    chat_id = job.data["chat_id"]
+    meds = data_store.get(chat_id, {})
+    if med_name in meds:
+        m = meds[med_name]
+        _, dose_label = get_display_units(m)
+        await context.bot.send_message(chat_id, f"🔔 Напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {dose_label}", reply_markup=reminder_action_menu(med_name))
+
+async def send_delayed_reminder_fallback(bot, chat_id: int, med_name: str, minutes: int):
+    await asyncio.sleep(minutes * 60)
+    meds = data_store.get(chat_id, {})
+    if med_name not in meds:
+        return
+    m = meds[med_name]
+    _, dose_label = get_display_units(m)
+    await bot.send_message(chat_id, f"🔔 Напоминание: {med_name}\nДозировка: {m['daily_mg']:g} {dose_label}", reply_markup=reminder_action_menu(med_name))
+
+# ================== POST_INIT И MAIN ==================
+async def post_init(application):
+    await application.bot.set_my_commands([BotCommand("start", "перезапустить бота")])
+    load_data_store()
+    asyncio.create_task(reminder_loop(application))
+    print(f"Бот v{BOT_VERSION} инициализирован. DATA_FILE={DATA_FILE}")
+    print("Фоновый цикл напоминаний запущен!")
+
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    print(f"Бот v{BOT_VERSION} запускается...")
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
