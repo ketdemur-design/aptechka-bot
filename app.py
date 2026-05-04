@@ -17,7 +17,7 @@ from telegram.ext import (
 
 # ================== КОНФИГУРАЦИЯ ==================
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.28"
+BOT_VERSION = "1.1.29"
 DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -30,7 +30,7 @@ started_users = set()
 pending_delayed_tasks = set()
 _write_lock = asyncio.Lock()
 
-# ================== СЕРИАЛИЗАЦИЯ (без изменений) ==================
+# ================== СЕРИАЛИЗАЦИЯ ==================
 def _serialize_med(med):
     payload = dict(med)
     for dt_key in ("created", "start_date"):
@@ -54,6 +54,7 @@ def _deserialize_med(med):
     payload.setdefault("notified", False)
     payload.setdefault("is_started", False)
     payload.setdefault("last_reminder_key", None)
+    payload.setdefault("last_9am_key", None)
     return payload
 
 async def save_data_store_async():
@@ -95,7 +96,7 @@ def load_data_store():
         print(f"Ошибка при загрузке данных: {e}")
         data_store = {}
 
-# ================== МЕНЮ (без изменений) ==================
+# ================== МЕНЮ ==================
 DAYS_MAP = {
     "Everyday": "Каждый день",
     "Weekdays": "Будни (Пн-Пт)",
@@ -169,7 +170,7 @@ def reminder_action_menu(med_name: str):
         [InlineKeyboardButton("⏰ Напомнить через 1 час", callback_data=f"later:60:{med_name}")],
     ])
 
-# ================== ХЕЛПЕРЫ (без изменений) ==================
+# ================== ХЕЛПЕРЫ ==================
 def get_now():
     return datetime.now(TZ_MOSCOW)
 
@@ -222,7 +223,7 @@ def format_schedule(times_dict):
         lines.append(f"{DAYS_MAP.get(day, day)}: {', '.join(times_dict[day])}")
     return "\n".join(lines) if lines else "не установлено"
 
-# ================== /start (без изменений) ==================
+# ================== /start ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     started_users.add(chat_id)
@@ -237,19 +238,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# ================== TEXT HANDLER (ИСПРАВЛЕНИЯ) ==================
+# ================== TEXT HANDLER ==================
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
 
-    # ---- проверка на перезапуск (без изменений) ----
     if text.lower() in {"старт", "начать", "start", "/start", "🚀 старт", "меню старт", "старт меню", "🚀 перезапустить бота"}:
         started_users.add(chat_id)
         user_states.pop(chat_id, None)
         await update.message.reply_text(f"Бот перезапущен (v{BOT_VERSION}). Главное меню:", reply_markup=main_menu())
         return
 
-    # ---- кнопки главного меню (без изменений) ----
     if text == "➕ Добавить лекарство":
         user_states[chat_id] = {"flow": "add", "step": "name", "data": {}}
         await update.message.reply_text("Введите название лекарства:")
@@ -299,7 +298,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Выберите лекарство для удаления:", reply_markup=InlineKeyboardMarkup(kb))
         return
 
-    # ---- состояние (flow) ----
     state = user_states.get(chat_id)
     if not state:
         if chat_id not in started_users:
@@ -308,7 +306,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     d = state.get("data", {})
 
-    # ---------- ADD ----------
     if state["flow"] == "add":
         if state["step"] == "name":
             d["name"] = text
@@ -343,7 +340,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_medicine(update, chat_id)
         return
 
-    # ---------- SET REMINDER (без изменений) ----------
     elif state["flow"] == "set_reminder":
         try:
             med_name = state["medicine"]
@@ -367,7 +363,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_states.pop(chat_id, None)
         return
 
-    # ---------- CHANGE DOSE (ИСПРАВЛЕНО: добавлен return) ----------
     elif state["flow"] == "dose":
         med = data_store[chat_id][state["medicine"]]
         med["daily_mg"] = float(text.replace(",", "."))
@@ -375,9 +370,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         days = calc_days_left(med)
         user_states.pop(chat_id, None)
         await update.message.reply_text(f"🔧 Дозировка изменена! Теперь хватит на {days} дн.", reply_markup=main_menu())
-        return   # <--- ВАЖНО: не идём дальше
+        return
 
-    # ---------- REFILL (ИСПРАВЛЕНО: return после units, правильный пересчёт) ----------
     elif state["flow"] == "refill":
         if state["step"] == "unit_mg":
             state["data"]["unit_mg"] = float(text.replace(",", "."))
@@ -390,7 +384,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             form = med.get("form", "tablets")
             unit_size = state["data"]["unit_mg"]
 
-            # Корректный пересчёт добавленного количества в "мг" (условные единицы)
             if form == "drops":
                 added = (unit_size / 0.05) * units
             elif form == "spray":
@@ -404,12 +397,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             days = calc_days_left(med)
             user_states.pop(chat_id, None)
             await update.message.reply_text(f"🔄 Пополнено! Хватит на {days} дн.", reply_markup=main_menu())
-            return   # <--- ВАЖНО: выход, чтобы не попасть в старый дублирующий код
-
-    # (старый дублирующий код удалён – он больше не выполняется)
+            return
 
 # ================== КНОПКИ (CALLBACKS) ==================
-# (без изменений, кроме save_medicine)
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -548,7 +538,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_data_store()
             await query.edit_message_text("🗑 Лекарство удалено")
 
-# ================== СОХРАНЕНИЕ ЛЕКАРСТВА (ИСПРАВЛЕНО: удалён дублирующий код) ==================
+# ================== СОХРАНЕНИЕ ЛЕКАРСТВА ==================
 async def save_medicine(update_or_query, chat_id):
     d = user_states[chat_id]["data"]
     form = d["form"]
@@ -557,7 +547,6 @@ async def save_medicine(update_or_query, chat_id):
     daily_mg = d["daily_mg"]
     course_days = d.get("course_days")
 
-    # Пересчёт общего запаса в "мг" (условные единицы)
     if form == "drops":
         total_resource = (unit_mg / 0.05) * units
     elif form == "spray":
@@ -577,6 +566,7 @@ async def save_medicine(update_or_query, chat_id):
         "times": {},
         "notified": False,
         "last_reminder_key": None,
+        "last_9am_key": None,
     }
 
     await save_data_store_async()
@@ -595,19 +585,15 @@ async def save_medicine(update_or_query, chat_id):
         "⚠️ Нажмите «▶️ Начать курс» для старта отсчёта."
     )
 
-    # Отправляем подтверждение в зависимости от типа входящего объекта
     if hasattr(update_or_query, 'reply_text'):
-        # Это объект Message (из text_handler)
         await update_or_query.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
     else:
-        # Это CallbackQuery (из кнопки "Пожизненно")
         await update_or_query.edit_message_text(msg, parse_mode="Markdown")
-        # Отправляем новое сообщение с главным меню, потому что предыдущее было отредактировано
         await update_or_query.message.reply_text("Главное меню:", reply_markup=main_menu())
 
     user_states.pop(chat_id, None)
 
-# ================== СВОДКА / ПРОГНОЗ (без изменений) ==================
+# ================== СВОДКА / ПРОГНОЗ ==================
 async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = None):
     if hasattr(update_or_query, "message") and update_or_query.message:
         message = update_or_query.message
@@ -677,7 +663,7 @@ async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = Non
 
     await message.reply_text(msg.strip(), reply_markup=main_menu())
 
-# ================== ФОНОВЫЙ ЦИКЛ НАПОМИНАНИЙ (без изменений) ==================
+# ================== ФОНОВЫЙ ЦИКЛ НАПОМИНАНИЙ ==================
 async def reminder_loop(application):
     while True:
         try:
@@ -766,60 +752,4 @@ def main():
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
-    main()async def save_medicine(update_or_query, chat_id):
-    d = user_states[chat_id]["data"]
-    form = d["form"]
-    unit_mg = d["unit_mg"]
-    units = d["units"]
-    daily_mg = d["daily_mg"]
-    course_days = d.get("course_days")
-
-    # Пересчёт общего запаса в "мг" (условные единицы)
-    if form == "drops":
-        total_resource = (unit_mg / 0.05) * units
-    elif form == "spray":
-        total_resource = (unit_mg / 0.1) * units
-    else:
-        total_resource = unit_mg * units
-
-    data_store.setdefault(chat_id, {})[d["name"]] = {
-        "form": form,
-        "daily_mg": daily_mg,
-        "unit_mg": unit_mg,
-        "total_mg": total_resource,
-        "course_days": course_days,
-        "created": get_now(),
-        "is_started": False,
-        "start_date": None,
-        "times": {},
-        "notified": False,
-        "last_reminder_key": None,
-    }
-
-    await save_data_store_async()
-    med = data_store[chat_id][d["name"]]
-    days = calc_days_left(med)
-    unit_label, dose_label = get_display_units(med)
-
-    msg = f"✅ Лекарство *{d['name']}* успешно добавлено!\n\n"
-    if form in ("drops", "spray", "liquid"):
-        msg += f"Объем флакона/ед: {unit_mg:g} мл\n"
-    else:
-        msg += f"Дозировка ед: {unit_mg:g} мг\n"
-    msg += (
-        f"Расход: {daily_mg:g} {dose_label}/сутки\n"
-        f"Хватит на: {days} дней\n\n"
-        "⚠️ Нажмите «▶️ Начать курс» для старта отсчёта."
-    )
-
-    # Отправляем подтверждение в зависимости от типа входящего объекта
-    if hasattr(update_or_query, 'reply_text'):
-        # Это объект Message (из text_handler)
-        await update_or_query.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
-    else:
-        # Это CallbackQuery (из кнопки "Пожизненно")
-        await update_or_query.edit_message_text(msg, parse_mode="Markdown")
-        # Отправляем новое сообщение с главным меню, потому что предыдущее было отредактировано
-        await update_or_query.message.reply_text("Главное меню:", reply_markup=main_menu())
-
-    user_states.pop(chat_id, None)
+    main()
