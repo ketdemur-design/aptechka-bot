@@ -6,7 +6,6 @@
     <title>Моя Аптечка</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Все стили из предыдущей версии (оставьте без изменений) */
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
         * { font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; }
         body {
@@ -45,20 +44,8 @@
         }
         .card-shadow { box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05); }
         .dark .card-shadow { box-shadow: 0 20px 40px -12px rgba(0,0,0,0.5); }
-        .shimmer {
-            background: linear-gradient(90deg, transparent, rgba(139,92,246,0.05), transparent);
-            background-size: 200% 100%;
-            animation: shimmer 2s infinite;
-        }
-        @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-        }
-        .progress-bar {
-            transition: width 0.8s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-        }
+        .progress-bar { transition: width 0.8s cubic-bezier(0.2, 0.9, 0.4, 1.1); }
         .btn-secondary { background-color: var(--btn-secondary); }
-        /* Модальное окно */
         .modal {
             display: none;
             position: fixed;
@@ -77,6 +64,16 @@
             width: 400px;
             padding: 1.5rem;
             box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .step-hidden { display: none; }
+        .course-btn {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 12px;
+            background: var(--btn-secondary);
+            cursor: pointer;
         }
     </style>
 </head>
@@ -129,44 +126,84 @@
 
     <div id="medsList" class="space-y-4"></div>
 
-    <!-- Модальное окно добавления лекарства -->
+    <!-- Модальное окно добавления лекарства (многошаговое) -->
     <div id="addModal" class="modal">
         <div class="modal-content">
             <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Новое лекарство</h3>
-            <form id="addMedForm">
-                <input type="text" id="medName" placeholder="Название" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10" required>
-                <select id="medForm" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10">
-                    <option value="tablets">Таблетки</option>
-                    <option value="capsules">Капсулы</option>
-                    <option value="drops">Капли</option>
-                    <option value="spray">Спрей</option>
-                    <option value="liquid">Жидкость</option>
-                    <option value="sachet">Саше</option>
-                </select>
-                <input type="number" step="any" id="medUnitMg" placeholder="Мг в одной единице (или мл)" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10" required>
-                <input type="number" id="medUnits" placeholder="Количество единиц" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10" required>
-                <input type="number" step="any" id="medDailyMg" placeholder="Суточная дозировка (мг/капли/мл)" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10" required>
-                <input type="number" id="medCourseDays" placeholder="Длительность курса (дней, 0 = пожизненно)" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
-                <div class="flex gap-3">
-                    <button type="submit" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Сохранить</button>
-                    <button type="button" id="closeModalBtn" class="flex-1 bg-rose-600 text-white py-3 rounded-xl font-bold">Отмена</button>
+            
+            <!-- Шаг 1: Название -->
+            <div id="step1" class="step">
+                <input type="text" id="medName" placeholder="Название лекарства" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10">
+                <button id="nextStep1" class="w-full bg-violet-600 text-white py-3 rounded-xl font-bold">Далее</button>
+            </div>
+            
+            <!-- Шаг 2: Форма -->
+            <div id="step2" class="step-hidden">
+                <p class="mb-3 font-bold">Выберите форму:</p>
+                <div class="grid grid-cols-2 gap-2 mb-4">
+                    <button data-form="tablets" class="form-select-btn p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">💊 Таблетки</button>
+                    <button data-form="capsules" class="form-select-btn p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">💊 Капсулы</button>
+                    <button data-form="drops" class="form-select-btn p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">💧 Капли</button>
+                    <button data-form="spray" class="form-select-btn p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">💨 Спрей</button>
+                    <button data-form="liquid" class="form-select-btn p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">🧴 Жидкость</button>
+                    <button data-form="sachet" class="form-select-btn p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">📦 Саше</button>
                 </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Floating Action Bar (декоративная) -->
-    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4">
-        <div class="glass h-16 rounded-full flex items-center justify-around px-8 shadow-2xl border-t border-white/10">
-            <button class="text-violet-400"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></button>
-            <button class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
-            <button class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+                <button id="backStep2" class="w-full bg-gray-500 text-white py-3 rounded-xl font-bold">Назад</button>
+            </div>
+            
+            <!-- Шаг 3: Дозировка единицы (зависит от формы) -->
+            <div id="step3" class="step-hidden">
+                <p id="unitQuestion" class="mb-3">Сколько мг в одной единице?</p>
+                <input type="number" id="medUnitMg" step="any" placeholder="Введите значение" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10">
+                <button id="nextStep3" class="w-full bg-violet-600 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button id="backStep3" class="w-full bg-gray-500 text-white py-3 rounded-xl font-bold mt-2">Назад</button>
+            </div>
+            
+            <!-- Шаг 4: Количество единиц -->
+            <div id="step4" class="step-hidden">
+                <p id="unitsQuestion" class="mb-3">Сколько единиц купили?</p>
+                <input type="number" id="medUnits" placeholder="Введите количество" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10">
+                <button id="nextStep4" class="w-full bg-violet-600 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button id="backStep4" class="w-full bg-gray-500 text-white py-3 rounded-xl font-bold mt-2">Назад</button>
+            </div>
+            
+            <!-- Шаг 5: Суточная дозировка -->
+            <div id="step5" class="step-hidden">
+                <p id="dailyQuestion" class="mb-3">Сколько в сутки назначено?</p>
+                <input type="number" id="medDailyMg" step="any" placeholder="Введите дозировку" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10">
+                <button id="nextStep5" class="w-full bg-violet-600 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button id="backStep5" class="w-full bg-gray-500 text-white py-3 rounded-xl font-bold mt-2">Назад</button>
+            </div>
+            
+            <!-- Шаг 6: Срок курса -->
+            <div id="step6" class="step-hidden">
+                <p class="mb-3 font-bold">Срок приёма:</p>
+                <div class="grid grid-cols-1 gap-2 mb-4">
+                    <button id="courseDays" class="course-option p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">📆 Дни</button>
+                    <button id="courseMonths" class="course-option p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">🗓 Месяцы (30 дней)</button>
+                    <button id="courseForever" class="course-option p-3 rounded-xl bg-[var(--surface-hover)] hover:bg-violet-600 hover:text-white transition">♾ Пожизненно</button>
+                </div>
+                <div id="courseValueInput" class="hidden">
+                    <input type="number" id="courseValue" placeholder="Введите количество" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-3 border border-white/10">
+                    <button id="submitCourse" class="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Сохранить</button>
+                </div>
+                <button id="backStep6" class="w-full bg-gray-500 text-white py-3 rounded-xl font-bold mt-2">Назад</button>
+            </div>
         </div>
     </div>
 
     <script>
         let medsData = [];
-        let activeReminderName = null;
+        let addState = {
+            step: 1,
+            name: '',
+            form: '',
+            unit_mg: null,
+            units: null,
+            daily_mg: null,
+            course_type: null,
+            course_value: null
+        };
 
         const medsContainer = document.getElementById('medsList');
         const activeCountSpan = document.getElementById('activeCount');
@@ -175,9 +212,171 @@
         const themeToggle = document.getElementById('themeToggle');
         const addMedBtn = document.getElementById('addMedBtn');
         const addModal = document.getElementById('addModal');
-        const closeModalBtn = document.getElementById('closeModalBtn');
-        const addMedForm = document.getElementById('addMedForm');
 
+        // Шаги
+        const step1 = document.getElementById('step1');
+        const step2 = document.getElementById('step2');
+        const step3 = document.getElementById('step3');
+        const step4 = document.getElementById('step4');
+        const step5 = document.getElementById('step5');
+        const step6 = document.getElementById('step6');
+
+        function showStep(step) {
+            step1.classList.add('step-hidden');
+            step2.classList.add('step-hidden');
+            step3.classList.add('step-hidden');
+            step4.classList.add('step-hidden');
+            step5.classList.add('step-hidden');
+            step6.classList.add('step-hidden');
+            
+            if (step === 1) step1.classList.remove('step-hidden');
+            else if (step === 2) step2.classList.remove('step-hidden');
+            else if (step === 3) step3.classList.remove('step-hidden');
+            else if (step === 4) step4.classList.remove('step-hidden');
+            else if (step === 5) step5.classList.remove('step-hidden');
+            else if (step === 6) step6.classList.remove('step-hidden');
+        }
+
+        function updateUnitQuestion() {
+            const q = document.getElementById('unitQuestion');
+            if (addState.form === 'drops') q.textContent = 'Объем флакона (мл)?';
+            else if (addState.form === 'spray') q.textContent = 'Сколько мл в одной единице?';
+            else if (addState.form === 'liquid') q.textContent = 'Сколько мл в одной единице?';
+            else q.textContent = 'Сколько мг в одной единице?';
+        }
+
+        function updateUnitsQuestion() {
+            const q = document.getElementById('unitsQuestion');
+            const labels = { tablets: 'таблеток', capsules: 'капсул', drops: 'флаконов', spray: 'флаконов', liquid: 'бутылок', sachet: 'саше' };
+            q.textContent = `Сколько ${labels[addState.form] || 'единиц'} купили?`;
+        }
+
+        function updateDailyQuestion() {
+            const q = document.getElementById('dailyQuestion');
+            if (addState.form === 'drops') q.textContent = 'Сколько капель в сутки назначено?';
+            else if (addState.form === 'spray') q.textContent = 'Сколько впрыскиваний в сутки назначено?';
+            else if (addState.form === 'liquid') q.textContent = 'Сколько мл в сутки назначено?';
+            else q.textContent = 'Сколько мг в сутки принимаете?';
+        }
+
+        // Обработчики шагов
+        document.getElementById('nextStep1').onclick = () => {
+            const name = document.getElementById('medName').value.trim();
+            if (!name) { alert('Введите название'); return; }
+            addState.name = name;
+            addState.step = 2;
+            showStep(2);
+        };
+
+        document.querySelectorAll('.form-select-btn').forEach(btn => {
+            btn.onclick = () => {
+                addState.form = btn.dataset.form;
+                addState.step = 3;
+                updateUnitQuestion();
+                showStep(3);
+            };
+        });
+
+        document.getElementById('nextStep3').onclick = () => {
+            const val = parseFloat(document.getElementById('medUnitMg').value);
+            if (isNaN(val)) { alert('Введите значение'); return; }
+            addState.unit_mg = val;
+            addState.step = 4;
+            updateUnitsQuestion();
+            showStep(4);
+        };
+
+        document.getElementById('nextStep4').onclick = () => {
+            const val = parseInt(document.getElementById('medUnits').value);
+            if (isNaN(val)) { alert('Введите количество'); return; }
+            addState.units = val;
+            addState.step = 5;
+            updateDailyQuestion();
+            showStep(5);
+        };
+
+        document.getElementById('nextStep5').onclick = () => {
+            const val = parseFloat(document.getElementById('medDailyMg').value);
+            if (isNaN(val)) { alert('Введите дозировку'); return; }
+            addState.daily_mg = val;
+            addState.step = 6;
+            showStep(6);
+            document.getElementById('courseValueInput').classList.add('hidden');
+        };
+
+        // Кнопки назад
+        document.getElementById('backStep2').onclick = () => { addState.step = 1; showStep(1); };
+        document.getElementById('backStep3').onclick = () => { addState.step = 2; showStep(2); };
+        document.getElementById('backStep4').onclick = () => { addState.step = 3; showStep(3); };
+        document.getElementById('backStep5').onclick = () => { addState.step = 4; showStep(4); };
+        document.getElementById('backStep6').onclick = () => { addState.step = 5; showStep(5); };
+
+        // Выбор курса
+        document.getElementById('courseDays').onclick = () => {
+            addState.course_type = 'days';
+            document.getElementById('courseValueInput').classList.remove('hidden');
+            document.getElementById('submitCourse').onclick = () => {
+                const val = parseInt(document.getElementById('courseValue').value);
+                if (isNaN(val)) { alert('Введите количество дней'); return; }
+                addState.course_value = val;
+                addMedicine();
+            };
+        };
+        
+        document.getElementById('courseMonths').onclick = () => {
+            addState.course_type = 'months';
+            document.getElementById('courseValueInput').classList.remove('hidden');
+            document.getElementById('submitCourse').onclick = () => {
+                const val = parseInt(document.getElementById('courseValue').value);
+                if (isNaN(val)) { alert('Введите количество месяцев'); return; }
+                addState.course_value = val * 30;
+                addMedicine();
+            };
+        };
+        
+        document.getElementById('courseForever').onclick = () => {
+            addState.course_value = 0;
+            addMedicine();
+        };
+
+        async function addMedicine() {
+            const medData = {
+                name: addState.name,
+                form: addState.form,
+                unit_mg: addState.unit_mg,
+                units: addState.units,
+                daily_mg: addState.daily_mg,
+                course_days: addState.course_value
+            };
+            
+            try {
+                const res = await fetch('/api/meds/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(medData)
+                });
+                if (res.ok) {
+                    await fetchMeds();
+                    addModal.classList.remove('active');
+                    // Сброс состояния
+                    addState = { step: 1, name: '', form: '', unit_mg: null, units: null, daily_mg: null, course_type: null, course_value: null };
+                    document.getElementById('medName').value = '';
+                    document.getElementById('medUnitMg').value = '';
+                    document.getElementById('medUnits').value = '';
+                    document.getElementById('medDailyMg').value = '';
+                    document.getElementById('courseValue').value = '';
+                    showStep(1);
+                } else {
+                    const err = await res.json();
+                    alert('Ошибка: ' + (err.error || 'неизвестная'));
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Ошибка соединения');
+            }
+        }
+
+        // Тема
         function initTheme() {
             const saved = localStorage.getItem('theme');
             const isDark = saved === 'dark' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -201,7 +400,7 @@
         }
         themeToggle.addEventListener('click', toggleTheme);
 
-        // API вызовы
+        // API вызовы (остальные функции такие же как в предыдущей версии)
         async function fetchMeds() {
             try {
                 const res = await fetch('/api/meds', { cache: 'no-store' });
@@ -214,98 +413,6 @@
                 medsContainer.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Ошибка загрузки данных</div>';
             }
         }
-
-        async function takeMed(chatId, medName) {
-            try {
-                const res = await fetch('/api/taken', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, med_name: medName })
-                });
-                if (res.ok) await fetchMeds();
-                else alert('Не удалось отметить приём');
-            } catch (err) { console.error(err); }
-        }
-
-        async function startCourse(chatId, medName) {
-            try {
-                const res = await fetch('/api/meds/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, med_name: medName })
-                });
-                if (res.ok) await fetchMeds();
-                else alert('Ошибка старта курса');
-            } catch (err) { console.error(err); }
-        }
-
-        async function deleteMed(chatId, medName) {
-            if (!confirm('Удалить это лекарство?')) return;
-            try {
-                const res = await fetch('/api/meds', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, med_name: medName })
-                });
-                if (res.ok) await fetchMeds();
-                else alert('Ошибка удаления');
-            } catch (err) { console.error(err); }
-        }
-
-        async function updateMed(chatId, medName, field, value) {
-            const body = field === 'dose' ? { daily_mg: value } : { add_stock: value };
-            try {
-                const res = await fetch('/api/meds/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, med_name: medName, ...body })
-                });
-                if (res.ok) await fetchMeds();
-                else alert('Ошибка обновления');
-            } catch (err) { console.error(err); }
-        }
-
-        // Добавление лекарства через веб
-        async function addMedicine(medData) {
-            try {
-                const res = await fetch('/api/meds/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(medData)
-                });
-                if (res.ok) {
-                    await fetchMeds();
-                    addModal.classList.remove('active');
-                    addMedForm.reset();
-                } else {
-                    const err = await res.json();
-                    alert('Ошибка: ' + (err.error || 'неизвестная'));
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Ошибка соединения');
-            }
-        }
-
-        addMedBtn.addEventListener('click', () => addModal.classList.add('active'));
-        closeModalBtn.addEventListener('click', () => addModal.classList.remove('active'));
-        addModal.addEventListener('click', (e) => { if (e.target === addModal) addModal.classList.remove('active'); });
-        addMedForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const name = document.getElementById('medName').value.trim();
-            if (!name) return;
-            const form = document.getElementById('medForm').value;
-            const unit_mg = parseFloat(document.getElementById('medUnitMg').value);
-            const units = parseInt(document.getElementById('medUnits').value);
-            const daily_mg = parseFloat(document.getElementById('medDailyMg').value);
-            let course_days = parseInt(document.getElementById('medCourseDays').value);
-            if (isNaN(course_days)) course_days = 0;
-            if (isNaN(unit_mg) || isNaN(units) || isNaN(daily_mg)) {
-                alert('Заполните все поля числами');
-                return;
-            }
-            addMedicine({ name, form, unit_mg, units, daily_mg, course_days });
-        });
 
         function updateStats() {
             const active = medsData.filter(m => m.is_started).length;
@@ -331,6 +438,16 @@
             return colors[form] || 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400';
         }
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
         function renderMeds() {
             if (!medsContainer) return;
             if (medsData.length === 0) {
@@ -344,128 +461,4 @@
                 const progressColor = progress >= 80 ? 'from-red-500 via-rose-500 to-rose-600' : (progress >= 50 ? 'from-yellow-400 via-amber-500 to-orange-500' : 'from-green-300 via-green-500 to-emerald-500');
                 const icon = getFormIcon(med.form);
                 const formColor = getFormColor(med.form);
-                const isStarted = med.is_started;
-                const daysLeft = med.days_left;
-                const remainingDoses = med.remaining_doses?.toFixed(0) || 0;
-                const doseLabel = med.dose_label || 'мг';
-
-                html += `<div class="glass rounded-[2.5rem] p-6 relative overflow-hidden group hover:border-white/10 transition-colors">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-4">
-                            <div class="w-14 h-14 rounded-[1.5rem] flex items-center justify-center relative shadow-lg ${formColor} transition-all duration-300">
-                                <div class="absolute inset-0 bg-white/10 dark:bg-transparent rounded-[1.5rem] pointer-events-none" style="background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 100%);"></div>
-                                <div class="relative z-10 text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)] dark:drop-shadow-none">${icon}</div>
-                            </div>
-                            <div>
-                                <h3 class="font-bold text-lg text-[var(--text-primary)] group-hover:text-violet-500 transition-colors uppercase tracking-tight">${escapeHtml(med.name)}</h3>
-                                <div class="flex items-center gap-2">
-                                    <p class="text-[var(--text-secondary)] text-sm font-medium">${med.dose_line || ''}</p>
-                                    <div class="w-1 h-1 rounded-full bg-[var(--text-secondary)]/30"></div>
-                                    <p class="text-[var(--text-secondary)] text-[11px] font-bold uppercase tracking-wider">${med.course_days === 0 ? 'Пожизненно' : `Курс: ${med.course_days} дн.`}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex flex-col items-end gap-2">
-                            <button onclick="deleteMed('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="p-2 text-rose-500/60 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 4V3c0-1 1-2 2-2h4c1 0 2 1 2 2v1"/></svg>
-                            </button>
-                            <div class="flex flex-col items-end gap-1">
-                                <div class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${daysLeft <= 7 ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">${daysLeft} дн. ост.</div>
-                                ${isStarted ? '<div class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>КУРС НАЧАТ</div>' : ''}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mb-6">
-                        <div class="flex justify-between text-[11px] font-extrabold text-[var(--text-secondary)] uppercase tracking-widest mb-3">
-                            <span class="flex items-center gap-1.5 opacity-90"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>${med.course_days === 0 ? 'ЗАПАС ЛЕКАРСТВА' : 'ПРОГРЕСС КУРСА'}</span>
-                            <span class="text-sm ${progress >= 80 ? 'text-rose-500 font-black' : (progress >= 50 ? 'text-amber-500 font-black' : 'text-emerald-500 font-black')}">${progress}%</span>
-                        </div>
-                        <div class="h-6 w-full bg-slate-400/15 dark:bg-black/60 rounded-full overflow-hidden relative p-1 border border-black/[0.03] dark:border-white/5 shadow-inner transition-all">
-                            <div class="progress-bar h-full rounded-full bg-gradient-to-r ${progressColor} relative flex items-center justify-end pr-0.5" style="width: ${progress}%">
-                                <div class="absolute inset-x-0 top-0 h-1/2 bg-white/20 rounded-t-full pointer-events-none"></div>
-                                <div class="w-3 h-3 rounded-full bg-white/30 backdrop-blur-md border border-white/40 shadow-sm flex items-center justify-center shrink-0"><div class="w-1 h-1 rounded-full bg-white/90 shadow-sm"></div></div>
-                            </div>
-                        </div>
-                        ${progress >= 80 ? '<p class="text-[10px] font-bold text-rose-500 mt-2 uppercase tracking-tighter text-right">Запас почти исчерпан!</p>' : ''}
-                    </div>
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-2 text-[var(--text-secondary)] text-xs font-bold btn-secondary px-4 py-2 rounded-2xl border border-white/10">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-violet-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            ${med.schedule || 'не указано'}
-                        </div>
-                        <div class="flex flex-col items-end gap-1">
-                            <div class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl transition-all duration-300 ${daysLeft <= 3 ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}">Запас: ${remainingDoses} ${doseLabel}</div>
-                            ${med.course_days > 0 && progress < 100 && daysLeft >= Math.ceil(med.course_days * (1 - progress/100)) ? '<span class="text-[9px] font-bold text-emerald-500 uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500"></div>На курс хватит</span>' : ''}
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <button onclick="handleRefill('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-emerald-500 hover:border-emerald-500/20 transition-all">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Пополнить
-                        </button>
-                        <button onclick="handleChangeDose('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-violet-500 hover:border-violet-500/20 transition-all">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 2 2 0 0 1 0-2.36 1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 1.65 1.65 0 0 0-.33 1.82 2 2 0 0 1 0 2.36 1.65 1.65 0 0 0 .33 1.82 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 .33-1.82z"/></svg>Дозировка
-                        </button>
-                    </div>
-                    ${!isStarted ? `<button onclick="startCourse('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="w-full bg-emerald-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:bg-emerald-600 active:scale-95 transition-all shadow-lg shadow-emerald-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Начать курс</button>` : `
-                        <div class="space-y-3">
-                            <div class="flex gap-2">
-                                <button onclick="takeMed('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}')" ${daysLeft <= 0 ? 'disabled' : ''} class="flex-1 bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl disabled:opacity-50"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Выпил</button>
-                                <button onclick="toggleReminder('${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex-1 bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Напомнить позже</button>
-                            </div>
-                            <div id="reminder-${med.name.replace(/[^a-zA-Z0-9]/g, '_')}" class="reminder-panel hidden"><div class="grid grid-cols-2 gap-2 pt-2">
-                                <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 10)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">10 мин</button>
-                                <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 20)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">20 мин</button>
-                                <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 30)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">30 мин</button>
-                                <button onclick="setReminderLater('${med.chat_id}', '${escapeHtml(med.name).replace(/'/g, "\\'")}', 60)" class="py-2.5 rounded-xl bg-violet-500/10 text-violet-500 text-xs font-bold border border-violet-500/20 hover:bg-violet-500/20 transition-all">1 час</button>
-                            </div></div>
-                        </div>`}
-                </div>`;
-            }
-            medsContainer.innerHTML = html;
-        }
-
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
-        }
-
-        window.toggleReminder = function(medName) {
-            const panelId = `reminder-${medName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-            const panel = document.getElementById(panelId);
-            if (panel) panel.classList.toggle('hidden');
-        };
-        window.setReminderLater = function(chatId, medName, minutes) {
-            alert(`Напоминание через ${minutes} минут установлено (в реальном приложении будет отправлено Telegram-ботом)`);
-            const panel = document.getElementById(`reminder-${medName.replace(/[^a-zA-Z0-9]/g, '_')}`);
-            if (panel) panel.classList.add('hidden');
-        };
-        window.handleRefill = function(chatId, medName) {
-            let amount = prompt('Введите количество для пополнения (в единицах лекарства):');
-            if (amount && !isNaN(parseFloat(amount))) updateMed(chatId, medName, 'refill', parseFloat(amount));
-            else if (amount) alert('Введите число');
-        };
-        window.handleChangeDose = function(chatId, medName) {
-            let dose = prompt('Введите новую суточную дозировку:');
-            if (dose && !isNaN(parseFloat(dose))) updateMed(chatId, medName, 'dose', parseFloat(dose));
-            else if (dose) alert('Введите число');
-        };
-        window.deleteMed = deleteMed;
-        window.startCourse = startCourse;
-        window.takeMed = takeMed;
-
-        refreshBtn.addEventListener('click', () => {
-            refreshBtn.querySelector('svg').classList.add('animate-spin');
-            fetchMeds().finally(() => setTimeout(() => refreshBtn.querySelector('svg').classList.remove('animate-spin'), 500));
-        });
-
-        initTheme();
-        fetchMeds();
-        setInterval(fetchMeds, 30000); // автообновление каждые 30 секунд
-    </script>
-</body>
-</html>
+                const isStarted =
