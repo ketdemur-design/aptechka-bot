@@ -1,8 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Моя Аптечка</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        * { font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; }
+        body {
+            background: var(--bg);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
+            background-image: radial-gradient(circle at 100% 0%, rgba(99,102,241,0.15) 0%, transparent 50%),
+                              radial-gradient(circle at 0% 100%, rgba(168,85,247,0.1) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+        :root {
+            --bg: #e2e8f0;
+            --surface: #ffffff;
+            --surface-hover: #f1f5f9;
+            --btn-secondary: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+        }
+        .dark {
+            --bg: #090b11;
+            --surface: #1a1f2e;
+            --surface-hover: #252b3d;
+            --btn-secondary: #2d3446;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+        }
+        .glass {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05);
+        }
+        .dark .glass {
+            background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.8) 100%);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .progress-bar {
+            transition: width 0.8s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--surface);
+            border-radius: 2rem;
+            max-width: 90%;
+            width: 400px;
+            padding: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translate(-50%, 20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        .toast-notification {
+            animation: slideUp 0.3s ease-out;
+        }
+    </style>
+</head>
+<body class="pb-20 px-4 pt-8 max-w-lg mx-auto">
+    <header class="flex items-center justify-between mb-10">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)] bg-clip-text text-transparent">
+                Мои лекарства
+            </h1>
+            <p class="text-[var(--text-secondary)] text-sm font-medium mt-1">Будьте здоровы и не пропускайте приём</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="themeToggle" class="p-2.5 glass rounded-2xl hover:bg-[var(--surface-hover)] transition-colors group">
+                <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            </button>
+            <button id="refreshBtn" class="p-2.5 glass rounded-2xl hover:bg-[var(--surface-hover)] transition-colors group">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-2 gap-4 mb-8">
+        <div class="glass p-5 rounded-[2rem] card-shadow">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="p-2 bg-emerald-400/10 rounded-xl text-emerald-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <span class="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-wider">Активные</span>
+            </div>
+            <div id="activeCount" class="text-3xl font-bold text-[var(--text-primary)]">0</div>
+        </div>
+        <div class="glass p-5 rounded-[2rem] card-shadow">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="p-2 bg-amber-400/10 rounded-xl text-amber-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+                </div>
+                <span class="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-wider">Заканчиваются</span>
+            </div>
+            <div id="expiringCount" class="text-3xl font-bold text-[var(--text-primary)]">0</div>
+        </div>
+    </div>
+
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] pl-2">Текущий график</h2>
+        <button id="addMedBtn" class="bg-violet-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-1 shadow-lg hover:bg-violet-700 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Добавить
+        </button>
+    </div>
+
+    <div id="medsList" class="space-y-4"></div>
+
+    <!-- Модальное окно -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <div id="wizardContent"></div>
+        </div>
+    </div>
+
+    <!-- Floating Action Bar -->
+    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4">
+        <div class="glass h-16 rounded-full flex items-center justify-around px-8 shadow-2xl border-t border-white/10">
+            <button class="text-violet-400 bottom-calendar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            </button>
+            <button class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] bottom-schedule">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </button>
+            <button class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] bottom-reminder">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
         let medsData = [];
         let addWizardStep = 0;
         let addWizardData = {};
 
-        // Константы для форм
         const FORM_LABELS = {
             tablets: ["таблетке", "таблеток"],
             capsules: ["капсуле", "капсул"],
@@ -19,6 +165,7 @@
         const themeToggle = document.getElementById('themeToggle');
         const addMedBtn = document.getElementById('addMedBtn');
         const addModal = document.getElementById('addModal');
+        const wizardContent = document.getElementById('wizardContent');
 
         function initTheme() {
             const saved = localStorage.getItem('theme');
@@ -46,7 +193,9 @@
                 return medsData;
             } catch (err) {
                 console.error(err);
-                medsContainer.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Ошибка загрузки данных</div>';
+                if (medsContainer) {
+                    medsContainer.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Ошибка загрузки данных</div>';
+                }
                 return [];
             }
         }
@@ -64,7 +213,10 @@
                 } else {
                     showToast('❌ Не удалось отметить приём', true);
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { 
+                console.error(err);
+                showToast('❌ Ошибка соединения', true);
+            }
         }
 
         async function startCourse(chatId, medName) {
@@ -80,7 +232,10 @@
                 } else {
                     showToast('❌ Ошибка старта курса', true);
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { 
+                console.error(err);
+                showToast('❌ Ошибка соединения', true);
+            }
         }
 
         async function deleteMed(chatId, medName) {
@@ -95,7 +250,10 @@
                 } else {
                     showToast('❌ Ошибка удаления', true);
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { 
+                console.error(err);
+                showToast('❌ Ошибка соединения', true);
+            }
         }
 
         async function updateMed(chatId, medName, field, value) {
@@ -113,7 +271,10 @@
                 } else {
                     showToast('❌ Ошибка обновления', true);
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { 
+                console.error(err);
+                showToast('❌ Ошибка соединения', true);
+            }
         }
 
         // Мастер добавления
@@ -125,11 +286,10 @@
         }
 
         function renderWizardStep() {
-            const modalContent = document.querySelector('#addModal .modal-content');
-            if (!modalContent) return;
+            if (!wizardContent) return;
 
             if (addWizardStep === 0) {
-                modalContent.innerHTML = `
+                wizardContent.innerHTML = `
                     <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Новое лекарство</h3>
                     <input type="text" id="wizardName" placeholder="Название лекарства" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10" autocomplete="off">
                     <div class="flex gap-3">
@@ -152,7 +312,7 @@
                 };
             } 
             else if (addWizardStep === 1) {
-                modalContent.innerHTML = `
+                wizardContent.innerHTML = `
                     <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Выберите форму</h3>
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <button data-form="tablets" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20">💊 Таблетки</button>
@@ -185,7 +345,7 @@
                 else if (form === "liquid") question = "Сколько мл в одной единице?";
                 else question = `Сколько мг в одной ${label[0]}?`;
                 
-                modalContent.innerHTML = `
+                wizardContent.innerHTML = `
                     <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">${question}</h3>
                     <input type="number" step="any" id="wizardUnitMg" placeholder="Введите значение" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
                     <div class="flex gap-3">
@@ -210,7 +370,7 @@
             }
             else if (addWizardStep === 3) {
                 const plural = FORM_LABELS[addWizardData.form]?.[1] || "единиц";
-                modalContent.innerHTML = `
+                wizardContent.innerHTML = `
                     <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Сколько ${plural} купили?</h3>
                     <input type="number" step="any" id="wizardUnits" placeholder="Количество" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
                     <div class="flex gap-3">
@@ -239,7 +399,7 @@
                 else if (addWizardData.form === "spray") doseUnit = "впрыскиваний";
                 else if (addWizardData.form === "liquid") doseUnit = "мл";
                 
-                modalContent.innerHTML = `
+                wizardContent.innerHTML = `
                     <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Сколько ${doseUnit} в сутки принимаете?</h3>
                     <input type="number" step="any" id="wizardDailyMg" placeholder="Суточная дозировка" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
                     <div class="flex gap-3">
@@ -263,7 +423,7 @@
                 };
             }
             else if (addWizardStep === 5) {
-                modalContent.innerHTML = `
+                wizardContent.innerHTML = `
                     <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Срок приёма</h3>
                     <div class="grid grid-cols-1 gap-3 mb-4">
                         <button id="courseDaysBtn" class="p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-emerald-500/20">📆 Количество дней</button>
@@ -286,7 +446,7 @@
                 
                 const showCourseValueInput = (type) => {
                     const unit = type === 'months' ? 'месяцев' : 'дней';
-                    modalContent.innerHTML = `
+                    wizardContent.innerHTML = `
                         <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Введите количество ${unit}</h3>
                         <input type="number" id="wizardCourseValue" placeholder="Количество" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
                         <div class="flex gap-3">
@@ -346,8 +506,7 @@
             if (existingToast) existingToast.remove();
             
             const toast = document.createElement('div');
-            toast.className = `toast-notification fixed bottom-28 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-white font-bold z-50 transition-all duration-300 ${isError ? 'bg-rose-600' : 'bg-emerald-600'} shadow-2xl`;
-            toast.style.animation = 'slideUp 0.3s ease-out';
+            toast.className = `toast-notification fixed bottom-28 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-white font-bold z-50 ${isError ? 'bg-rose-600' : 'bg-emerald-600'} shadow-2xl`;
             toast.innerText = message;
             document.body.appendChild(toast);
             
@@ -361,8 +520,8 @@
         function updateStats() {
             const active = medsData.filter(m => m.is_started).length;
             const expiring = medsData.filter(m => m.days_left <= 7 && m.days_left > 0).length;
-            activeCountSpan.innerText = active;
-            expiringCountSpan.innerText = expiring;
+            if (activeCountSpan) activeCountSpan.innerText = active;
+            if (expiringCountSpan) expiringCountSpan.innerText = expiring;
         }
 
         function getFormIcon(form) {
@@ -384,7 +543,7 @@
 
         function renderMeds() {
             if (!medsContainer) return;
-            if (medsData.length === 0) {
+            if (!medsData || medsData.length === 0) {
                 medsContainer.innerHTML = `<div class="text-center py-20"><div class="bg-[var(--surface-hover)] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--text-secondary)]/50"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></div><p class="text-[var(--text-secondary)] font-medium">Лекарства не найдены.<br/>Нажмите «Добавить»</p></div>`;
                 return;
             }
@@ -486,35 +645,26 @@
         window.takeMed = takeMed;
 
         // Кнопки нижней панели
-        function setupBottomButtons() {
-            const bottomButtons = document.querySelectorAll('.fixed.bottom-8 .glass button');
-            if (bottomButtons.length >= 3) {
-                bottomButtons[0].onclick = () => {
-                    showToast('📋 Сводка в Telegram-боте');
-                };
-                bottomButtons[1].onclick = () => {
-                    showToast('📅 Настройка расписания в Telegram-боте');
-                };
-                bottomButtons[2].onclick = () => {
-                    showToast('⏰ Напоминания настраиваются в Telegram-боте');
-                };
-            }
-        }
+        document.querySelector('.bottom-calendar')?.addEventListener('click', () => {
+            showToast('📋 Сводка в Telegram-боте');
+        });
+        document.querySelector('.bottom-schedule')?.addEventListener('click', () => {
+            showToast('📅 Настройка расписания в Telegram-боте');
+        });
+        document.querySelector('.bottom-reminder')?.addEventListener('click', () => {
+            showToast('⏰ Напоминания настраиваются в Telegram-боте');
+        });
 
         // Инициализация
-        addMedBtn.onclick = () => showAddWizard();
-        refreshBtn.onclick = () => fetchMeds();
+        if (addMedBtn) addMedBtn.onclick = () => showAddWizard();
+        if (refreshBtn) refreshBtn.onclick = () => fetchMeds();
         
-        // Закрытие модалки по клику вне
         addModal.addEventListener('click', (e) => {
             if (e.target === addModal) addModal.classList.remove('active');
         });
         
-        // Добавляем стиль для toast
-        const style = document.createElement('style');
-        style.textContent = `@keyframes slideUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }`;
-        document.head.appendChild(style);
-        
-        setupBottomButtons();
         fetchMeds();
         setInterval(fetchMeds, 30000);
+    </script>
+</body>
+</html>
