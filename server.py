@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import json
 from datetime import datetime
@@ -99,11 +98,9 @@ def calc_days_left(med):
         return 0
     capacity_days = int(med["total_mg"] // med["daily_mg"])
     
-    # Если курс не начат, просто показываем сколько дней хватит
     if not med.get("is_started") or not med.get("start_date"):
         return capacity_days
     
-    # Если курс начат, учитываем прошедшие дни
     start_dt = med["start_date"]
     if isinstance(start_dt, str):
         try:
@@ -141,7 +138,6 @@ def format_schedule(times_dict):
     return ", ".join(lines) if lines else "не указано"
 
 def calculate_progress(med):
-    """Рассчет прогресса курса в процентах"""
     course_days = med.get("course_days")
     if not course_days or course_days <= 0:
         return 0
@@ -167,7 +163,6 @@ async def get_meds(chat_id: Optional[int] = None):
     """Получить все лекарства"""
     data_store = load_data_store()
     
-    # Если chat_id не указан, берем первый доступный чат
     if chat_id is None:
         if data_store:
             chat_id = list(data_store.keys())[0]
@@ -207,9 +202,8 @@ async def add_medicine(req: AddMedicineRequest):
     """Добавить новое лекарство"""
     try:
         data_store = load_data_store()
-        chat_id = 1  # Фиксированный ID для PWA
+        chat_id = 1
         
-        # Пересчёт общего запаса в условные "мг"
         if req.form == "drops":
             total_resource = (req.unit_mg / 0.05) * req.units
         elif req.form == "spray":
@@ -217,7 +211,6 @@ async def add_medicine(req: AddMedicineRequest):
         else:
             total_resource = req.unit_mg * req.units
         
-        # Проверяем, не существует ли уже лекарство с таким именем
         if req.name in data_store.get(chat_id, {}):
             raise HTTPException(status_code=400, detail="Лекарство с таким названием уже существует")
         
@@ -263,14 +256,12 @@ async def update_medicine(req: UpdateMedicineRequest):
         med = data_store[req.chat_id][req.med_name]
         
         if req.daily_mg is not None:
-            # Изменение дозировки
             med["daily_mg"] = req.daily_mg
             if save_data_store(data_store):
                 days = calc_days_left(med)
                 return {"success": True, "message": f"Дозировка изменена! Хватит на {days} дн."}
         
         if req.add_stock is not None:
-            # Пополнение запаса
             form = med.get("form", "tablets")
             if form == "drops":
                 added = (med["unit_mg"] / 0.05) * req.add_stock
@@ -329,7 +320,6 @@ async def mark_taken(req: TakenRequest):
         if req.chat_id in data_store and req.med_name in data_store[req.chat_id]:
             med = data_store[req.chat_id][req.med_name]
             
-            # Определяем разовую дозу
             times_dict = med.get("times", {})
             doses_count = 1
             for times in times_dict.values():
@@ -346,7 +336,7 @@ async def mark_taken(req: TakenRequest):
         
     except Exception as e:
         print(f"❌ Ошибка отметки приёма: {e}")
-        return {"success": True, "message": "Приём отмечен"}  # Не возвращаем ошибку
+        return {"success": True, "message": "Приём отмечен"}
 
 @app.delete("/api/meds")
 async def delete_medicine(chat_id: int, med_name: str):
@@ -373,9 +363,16 @@ async def health_check():
     """Проверка работоспособности"""
     return {"status": "ok", "data_file": str(DATA_FILE), "exists": DATA_FILE.exists()}
 
+# ================== ГЛАВНАЯ СТРАНИЦА ==================
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "MedTracker API", "version": "1.0"}
+    """Возвращает главную страницу"""
+    # Пытаемся найти index.html в текущей директории
+    index_path = Path(__file__).parent / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    else:
+        return {"status": "ok", "service": "MedTracker API", "version": "1.0", "message": "Index.html not found"}
 
 # ================== ЗАПУСК ==================
 def run_server():
@@ -385,6 +382,7 @@ def run_server():
     print(f"\n{'='*50}")
     print(f"🚀 MedTracker API Server")
     print(f"📁 Файл данных: {DATA_FILE.absolute()}")
+    print(f"📄 HTML файл: {Path(__file__).parent / 'index.html'}")
     print(f"🌐 Адрес: http://{host}:{port}")
     print(f"📊 Health check: http://{host}:{port}/health")
     print(f"{'='*50}\n")
