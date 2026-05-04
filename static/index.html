@@ -469,3 +469,364 @@
     </script>
 </body>
 </html>
+
+// Добавьте этот код в конец существующего <script> в index.html
+
+// ================== МАСТЕР ДОБАВЛЕНИЯ ЛЕКАРСТВА ==================
+let addWizardStep = 0;
+let addWizardData = {};
+
+function resetAddWizard() {
+    addWizardStep = 0;
+    addWizardData = {};
+    document.getElementById('addModal').classList.remove('active');
+    document.getElementById('addMedForm').reset();
+}
+
+function showAddStep() {
+    const modalContent = document.querySelector('#addModal .modal-content');
+    const form = document.getElementById('addMedForm');
+    
+    if (addWizardStep === 0) {
+        // Шаг 1: Название
+        form.innerHTML = `
+            <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Новое лекарство</h3>
+            <input type="text" id="wizardName" placeholder="Название лекарства" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10" required>
+            <div class="flex gap-3">
+                <button type="button" id="wizardNextBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button type="button" id="wizardCancelBtn" class="flex-1 bg-rose-600 text-white py-3 rounded-xl font-bold">Отмена</button>
+            </div>
+        `;
+        document.getElementById('wizardNextBtn').onclick = () => {
+            const name = document.getElementById('wizardName').value.trim();
+            if (!name) {
+                showToast('❌ Введите название лекарства');
+                return;
+            }
+            addWizardData.name = name;
+            addWizardStep = 1;
+            showAddStep();
+        };
+        document.getElementById('wizardCancelBtn').onclick = resetAddWizard;
+    } else if (addWizardStep === 1) {
+        // Шаг 2: Форма
+        form.innerHTML = `
+            <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Выберите форму</h3>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <button type="button" data-form="tablets" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20 transition-all">💊 Таблетки</button>
+                <button type="button" data-form="capsules" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20 transition-all">💊 Капсулы</button>
+                <button type="button" data-form="drops" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20 transition-all">👁 Капли</button>
+                <button type="button" data-form="spray" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20 transition-all">💨 Спрей</button>
+                <button type="button" data-form="sachet" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20 transition-all">📦 Саше</button>
+                <button type="button" data-form="liquid" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20 transition-all">🧴 Жидкость</button>
+            </div>
+            <button type="button" id="wizardBackBtn" class="w-full p-3 rounded-xl bg-[var(--btn-secondary)] text-[var(--text-primary)] font-bold mb-2">Назад</button>
+        `;
+        document.querySelectorAll('.wizard-form-btn').forEach(btn => {
+            btn.onclick = () => {
+                addWizardData.form = btn.dataset.form;
+                addWizardStep = 2;
+                showAddStep();
+            };
+        });
+        document.getElementById('wizardBackBtn').onclick = () => {
+            addWizardStep = 0;
+            showAddStep();
+        };
+    } else if (addWizardStep === 2) {
+        // Шаг 3: Мг в единице
+        const formLabel = FORM_LABELS[addWizardData.form] || ("единице", "единиц");
+        const singular = formLabel[0];
+        const question = addWizardData.form === "drops" ? "Объем флакона (мл)?" :
+                         addWizardData.form === "spray" ? "Сколько мл в одном флаконе?" :
+                         addWizardData.form === "liquid" ? "Сколько мл в одной единице?" :
+                         `Сколько мг в одной ${singular}?`;
+        form.innerHTML = `
+            <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">${question}</h3>
+            <input type="number" step="any" id="wizardUnitMg" placeholder="Введите значение" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10" required>
+            <div class="flex gap-3">
+                <button type="button" id="wizardNextBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button type="button" id="wizardBackBtn" class="flex-1 bg-[var(--btn-secondary)] text-[var(--text-primary)] py-3 rounded-xl font-bold">Назад</button>
+            </div>
+        `;
+        document.getElementById('wizardNextBtn').onclick = () => {
+            const val = parseFloat(document.getElementById('wizardUnitMg').value);
+            if (isNaN(val) || val <= 0) {
+                showToast('❌ Введите корректное значение');
+                return;
+            }
+            addWizardData.unit_mg = val;
+            addWizardStep = 3;
+            showAddStep();
+        };
+        document.getElementById('wizardBackBtn').onclick = () => {
+            addWizardStep = 1;
+            showAddStep();
+        };
+    } else if (addWizardStep === 3) {
+        // Шаг 4: Количество единиц
+        const plural = FORM_LABELS[addWizardData.form]?.[1] || "единиц";
+        form.innerHTML = `
+            <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Сколько ${plural} купили?</h3>
+            <input type="number" step="any" id="wizardUnits" placeholder="Количество" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10" required>
+            <div class="flex gap-3">
+                <button type="button" id="wizardNextBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button type="button" id="wizardBackBtn" class="flex-1 bg-[var(--btn-secondary)] text-[var(--text-primary)] py-3 rounded-xl font-bold">Назад</button>
+            </div>
+        `;
+        document.getElementById('wizardNextBtn').onclick = () => {
+            const val = parseFloat(document.getElementById('wizardUnits').value);
+            if (isNaN(val) || val <= 0) {
+                showToast('❌ Введите корректное количество');
+                return;
+            }
+            addWizardData.units = val;
+            addWizardStep = 4;
+            showAddStep();
+        };
+        document.getElementById('wizardBackBtn').onclick = () => {
+            addWizardStep = 2;
+            showAddStep();
+        };
+    } else if (addWizardStep === 4) {
+        // Шаг 5: Суточная дозировка
+        const doseUnit = addWizardData.form === "drops" ? "капель" :
+                         addWizardData.form === "spray" ? "впрыскиваний" :
+                         addWizardData.form === "liquid" ? "мл" : "мг";
+        form.innerHTML = `
+            <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Сколько ${doseUnit} в сутки принимаете?</h3>
+            <input type="number" step="any" id="wizardDailyMg" placeholder="Суточная дозировка" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10" required>
+            <div class="flex gap-3">
+                <button type="button" id="wizardNextBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button type="button" id="wizardBackBtn" class="flex-1 bg-[var(--btn-secondary)] text-[var(--text-primary)] py-3 rounded-xl font-bold">Назад</button>
+            </div>
+        `;
+        document.getElementById('wizardNextBtn').onclick = () => {
+            const val = parseFloat(document.getElementById('wizardDailyMg').value);
+            if (isNaN(val) || val <= 0) {
+                showToast('❌ Введите корректную дозировку');
+                return;
+            }
+            addWizardData.daily_mg = val;
+            addWizardStep = 5;
+            showAddStep();
+        };
+        document.getElementById('wizardBackBtn').onclick = () => {
+            addWizardStep = 3;
+            showAddStep();
+        };
+    } else if (addWizardStep === 5) {
+        // Шаг 6: Длительность курса
+        form.innerHTML = `
+            <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Срок приёма</h3>
+            <div class="grid grid-cols-1 gap-3 mb-4">
+                <button type="button" data-course="days" class="wizard-course-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-emerald-500/20 transition-all">📆 Количество дней</button>
+                <button type="button" data-course="months" class="wizard-course-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-emerald-500/20 transition-all">🗓 Количество месяцев</button>
+                <button type="button" data-course="forever" class="wizard-course-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-emerald-500/20 transition-all">♾ Пожизненно</button>
+            </div>
+            <button type="button" id="wizardBackBtn" class="w-full p-3 rounded-xl bg-[var(--btn-secondary)] text-[var(--text-primary)] font-bold">Назад</button>
+        `;
+        
+        const showCourseValueInput = (type) => {
+            const unit = type === 'months' ? 'месяцев' : 'дней';
+            form.innerHTML = `
+                <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Введите количество ${unit}</h3>
+                <input type="number" id="wizardCourseValue" placeholder="Количество" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10" required>
+                <div class="flex gap-3">
+                    <button type="button" id="wizardCourseConfirmBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Сохранить</button>
+                    <button type="button" id="wizardCourseBackBtn" class="flex-1 bg-[var(--btn-secondary)] text-[var(--text-primary)] py-3 rounded-xl font-bold">Назад</button>
+                </div>
+            `;
+            document.getElementById('wizardCourseConfirmBtn').onclick = () => {
+                let val = parseInt(document.getElementById('wizardCourseValue').value);
+                if (isNaN(val) || val <= 0) {
+                    showToast('❌ Введите корректное количество');
+                    return;
+                }
+                if (type === 'months') val *= 30;
+                addWizardData.course_days = val;
+                addWizardData.course_type = type;
+                finishAddWizard();
+            };
+            document.getElementById('wizardCourseBackBtn').onclick = () => {
+                addWizardStep = 5;
+                showAddStep();
+            };
+        };
+        
+        document.querySelectorAll('.wizard-course-btn').forEach(btn => {
+            btn.onclick = () => {
+                const type = btn.dataset.course;
+                if (type === 'forever') {
+                    addWizardData.course_days = 0;
+                    addWizardData.course_type = 'forever';
+                    finishAddWizard();
+                } else {
+                    showCourseValueInput(type);
+                }
+            };
+        });
+        document.getElementById('wizardBackBtn').onclick = () => {
+            addWizardStep = 4;
+            showAddStep();
+        };
+    }
+}
+
+async function finishAddWizard() {
+    const medData = {
+        name: addWizardData.name,
+        form: addWizardData.form,
+        unit_mg: addWizardData.unit_mg,
+        units: addWizardData.units,
+        daily_mg: addWizardData.daily_mg,
+        course_days: addWizardData.course_days || 0
+    };
+    
+    try {
+        const res = await fetch('/api/meds/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(medData)
+        });
+        
+        if (res.ok) {
+            showToast('✅ Лекарство успешно добавлено!');
+            await fetchMeds();
+            resetAddWizard();
+        } else {
+            const err = await res.json();
+            showToast('❌ Ошибка: ' + (err.error || 'неизвестная'));
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('❌ Ошибка соединения');
+    }
+}
+
+// ================== TOAST УВЕДОМЛЕНИЯ ==================
+function showToast(message, isError = false) {
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) existingToast.remove();
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-notification fixed bottom-28 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-white font-bold z-50 transition-all duration-300 ${isError ? 'bg-rose-600' : 'bg-emerald-600'} shadow-2xl`;
+    toast.style.animation = 'slideUp 0.3s ease-out';
+    toast.innerText = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translate(-50%, 20px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Добавляем анимацию для toast
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideUp {
+        from { opacity: 0; transform: translate(-50%, 20px); }
+        to { opacity: 1; transform: translate(-50%, 0); }
+    }
+    .reminder-panel {
+        transition: all 0.2s ease;
+    }
+`;
+document.head.appendChild(style);
+
+// ================== КНОПКИ НИЖНЕЙ ПАНЕЛИ ==================
+function setupBottomButtons() {
+    const bottomButtons = document.querySelectorAll('.fixed.bottom-8 .glass button');
+    if (bottomButtons.length >= 3) {
+        // Первая кнопка (календарь) - показывает сводку
+        bottomButtons[0].onclick = () => {
+            showSummaryInPWA();
+        };
+        // Вторая кнопка (список/календарь) - показывает расписание
+        bottomButtons[1].onclick = () => {
+            showScheduleSettings();
+        };
+        // Третья кнопка (часы) - напоминания
+        bottomButtons[2].onclick = () => {
+            showReminderMenu();
+        };
+    }
+}
+
+async function showSummaryInPWA() {
+    try {
+        const res = await fetch('/api/meds');
+        const meds = await res.json();
+        
+        if (!meds.length) {
+            showToast('📋 Нет активных лекарств');
+            return;
+        }
+        
+        let summary = '📋 Сводка и прогноз:\n\n';
+        for (const med of meds) {
+            summary += `💊 ${med.name} (${med.is_started ? '▶️ Идет прием' : '⏸ Ожидание'})\n`;
+            summary += `   Запас: ${med.days_left} дн. | Доза: ${med.daily_mg} ${med.dose_label}/сут\n`;
+            summary += `   Расписание: ${med.schedule || 'не указано'}\n`;
+            if (med.course_days > 0) {
+                summary += `   Курс: ${med.course_days} дн.\n`;
+            }
+            summary += '⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n';
+        }
+        alert(summary);
+    } catch (err) {
+        console.error(err);
+        showToast('❌ Ошибка загрузки сводки');
+    }
+}
+
+async function showScheduleSettings() {
+    try {
+        const res = await fetch('/api/meds');
+        const meds = await res.json();
+        
+        if (!meds.length) {
+            showToast('📋 Нет лекарств для настройки расписания');
+            return;
+        }
+        
+        let medList = 'Выберите лекарство для настройки расписания:\n';
+        meds.forEach((med, idx) => {
+            medList += `\n${idx + 1}. ${med.name}`;
+        });
+        
+        const choice = prompt(medList + '\n\nВведите номер лекарства:');
+        if (choice) {
+            const idx = parseInt(choice) - 1;
+            if (meds[idx]) {
+                alert(`Настройка расписания для "${meds[idx].name}"\n\nВ Telegram-боте доступна полная настройка:\n- Выберите день недели\n- Укажите время (например: 08:00, 20:00)\n\nОткройте бота для детальной настройки.`);
+            }
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function showReminderMenu() {
+    alert('⏰ Напоминания\n\nБот пришлёт уведомление в Telegram в указанное вами время.\n\nЧтобы настроить расписание приёма:\n1. Откройте Telegram-бота\n2. Нажмите «⏰ Напоминание (Дни/Время)»\n3. Выберите лекарство\n4. Настройте дни и время приёма');
+}
+
+// Переопределяем открытие модального окна
+const originalAddMedBtn = document.getElementById('addMedBtn');
+if (originalAddMedBtn) {
+    const newAddMedBtn = originalAddMedBtn.cloneNode(true);
+    originalAddMedBtn.parentNode.replaceChild(newAddMedBtn, originalAddMedBtn);
+    newAddMedBtn.onclick = () => {
+        resetAddWizard();
+        addWizardStep = 0;
+        addWizardData = {};
+        document.getElementById('addModal').classList.add('active');
+        showAddStep();
+    };
+}
+
+// Инициализация
+document.addEventListener('DOMContentLoaded', () => {
+    setupBottomButtons();
+});
