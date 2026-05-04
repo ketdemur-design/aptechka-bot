@@ -3,7 +3,3 @@ pytz
 fastapi
 uvicorn[standard]
 pydantic
-python-telegram-bot
-pytz
-fastapi
-uvicorn[standard]
