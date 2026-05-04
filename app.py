@@ -39,6 +39,15 @@ pending_delayed_tasks = set()
 _write_lock = asyncio.Lock()
 bot_application = None
 
+# В начале app.py, после импортов
+DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
+
+# Для локальной отладки
+if not DATA_FILE.parent.exists():
+    DATA_FILE = Path("meds_data.json")
+
+print(f"🤖 Бот использует файл данных: {DATA_FILE.absolute()}")
+
 # ================== PYDANTIC МОДЕЛИ ДЛЯ API ==================
 class AddMedicineRequest(BaseModel):
     name: str
