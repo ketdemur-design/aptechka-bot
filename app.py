@@ -24,8 +24,10 @@ from telegram.ext import (
 )
 
 # ================== КОНФИГУРАЦИЯ ==================
+# Версия приложения (меняйте это значение при обновлении кода)
+APP_VERSION = "1.1.31"
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-BOT_VERSION = "1.1.30"
+BOT_VERSION = APP_VERSION
 DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -282,6 +284,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/api/version")
+def api_version():
+    return {"version": APP_VERSION}
 
 @app.get("/api/meds")
 async def get_meds(chat_id: Optional[int] = None):
