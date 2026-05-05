@@ -81,9 +81,12 @@
 <body class="pb-20 px-4 pt-8 max-w-lg mx-auto">
     <header class="flex items-center justify-between mb-10">
         <div>
-            <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)] bg-clip-text text-transparent">
-                Мои лекарства
-            </h1>
+            <div class="flex items-end gap-2">
+                <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)] bg-clip-text text-transparent">
+                    Мои лекарства
+                </h1>
+                <span class="text-[10px] font-thin text-[var(--text-secondary)] mb-1">V.1</span>
+            </div>
             <p class="text-[var(--text-secondary)] text-sm font-medium mt-1">Будьте здоровы и не пропускайте приём</p>
         </div>
         <div class="flex items-center gap-2">
@@ -684,8 +687,14 @@
                     if (modal) modal.classList.remove('active');
                     await fetchMeds();
                 } else {
-                    const err = await res.json();
-                    showToast('❌ Ошибка: ' + (err.detail || 'неизвестная'), true);
+                    let detail = 'неизвестная';
+                    try {
+                        const err = await res.json();
+                        detail = err.detail || detail;
+                    } catch (_) {
+                        detail = await res.text() || detail;
+                    }
+                    showToast('❌ Ошибка: ' + detail, true);
                 }
             } catch (err) {
                 console.error(err);
