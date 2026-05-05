@@ -207,8 +207,12 @@ async def add_medicine(req: AddMedicineRequest):
     logger.info(f"POST /api/meds/add called with: {req.name}, {req.form}")
     try:
         data_store = load_data_store()
-        chat_id = 1
+        chat_id = req.chat_id
         
+        req_name = req.name.strip()
+        if not req_name:
+            raise HTTPException(status_code=400, detail="Название лекарства не может быть пустым")
+
         # Пересчёт общего запаса
         if req.form == "drops":
             total_resource = (req.unit_mg / 0.05) * req.units
@@ -220,12 +224,12 @@ async def add_medicine(req: AddMedicineRequest):
         logger.info(f"Total resource calculated: {total_resource}")
         
         # Проверяем, не существует ли уже лекарство
-        if req.name in data_store.get(chat_id, {}):
-            logger.warning(f"Medicine {req.name} already exists")
+        if req_name in data_store.get(chat_id, {}):
+            logger.warning(f"Medicine {req_name} already exists")
             raise HTTPException(status_code=400, detail="Лекарство с таким названием уже существует")
         
         # Создаем запись
-        data_store.setdefault(chat_id, {})[req.name] = {
+        data_store.setdefault(chat_id, {})[req_name] = {
             "form": req.form,
             "daily_mg": req.daily_mg,
             "unit_mg": req.unit_mg,
@@ -242,9 +246,9 @@ async def add_medicine(req: AddMedicineRequest):
         
         # Сохраняем
         if save_data_store(data_store):
-            days = calc_days_left(data_store[chat_id][req.name])
-            logger.info(f"✅ Added medicine: {req.name}, lasts {days} days")
-            return {"success": True, "message": f"✅ Лекарство добавлено! Хватит на {days} дней", "name": req.name}
+            days = calc_days_left(data_store[chat_id][req_name])
+            logger.info(f"✅ Added medicine: {req_name}, lasts {days} days")
+            return {"success": True, "message": f"✅ Лекарство добавлено! Хватит на {days} дней", "name": req_name}
         else:
             logger.error("Failed to save data")
             raise HTTPException(status_code=500, detail="Ошибка сохранения данных")
