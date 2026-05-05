@@ -351,17 +351,18 @@ async def add_medicine(req: AddMedicineRequest):
         
         await save_data_store_async()
         
+        days = calc_days_left(data_store[chat_id][req.name])
+        _, dose_label = get_display_units(data_store[chat_id][req.name])
+
         # Отправляем подтверждение в Telegram, если бот запущен
         if bot_application:
             try:
-                days = calc_days_left(data_store[chat_id][req.name])
-                _, dose_label = get_display_units(data_store[chat_id][req.name])
                 msg = f"✅ Лекарство *{req.name}* успешно добавлено через PWA!\n\nРасход: {req.daily_mg} {dose_label}/сутки\nХватит на: {days} дней"
                 await bot_application.bot.send_message(chat_id, msg, parse_mode="Markdown")
             except Exception as e:
                 print(f"Ошибка отправки уведомления в Telegram: {e}")
         
-        return {"success": True, "message": "Лекарство добавлено"}
+        return {"success": True, "message": f"✅ Лекарство добавлено! Хватит на {days} дней", "name": req.name}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
