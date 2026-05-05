@@ -25,7 +25,7 @@ from telegram.ext import (
 
 # ================== КОНФИГУРАЦИЯ ==================
 # Версия приложения (меняйте это значение при обновлении кода)
-APP_VERSION = "1.1.31"
+APP_VERSION = "V.2"
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 BOT_VERSION = APP_VERSION
 DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
