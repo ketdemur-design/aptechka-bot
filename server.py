@@ -19,11 +19,7 @@ logger = logging.getLogger(__name__)
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 
 # Используем ТОТ ЖЕ файл, что и в app.py
-DATA_FILE = Path("/data/meds_data.json")
-
-# Для локальной отладки - если нет /data, используем локальную папку
-if not DATA_FILE.parent.exists():
-    DATA_FILE = Path("meds_data.json")
+DATA_FILE = Path("meds_data.json")
 
 logger.info(f"📁 Server использует файл данных: {DATA_FILE.absolute()}")
 
@@ -39,7 +35,7 @@ app.add_middleware(
 
 # ================== МОДЕЛИ ==================
 class AddMedicineRequest(BaseModel):
-    chat_id: Optional[int] = 1
+    chat_id: Optional[int] = 0
     name: str
     form: str
     unit_mg: float
@@ -209,8 +205,8 @@ async def add_medicine(req: AddMedicineRequest):
     try:
         data_store = load_data_store()
         chat_id = req.chat_id
-        if chat_id is None:
-            chat_id = next(iter(data_store), 1)
+        if chat_id in (None, 0):
+            chat_id = next(iter(data_store), 12345)
         
         req_name = req.name.strip()
         if not req_name:
@@ -400,7 +396,7 @@ async def root():
     if index_path.exists():
         return FileResponse(index_path)
     else:
-        return {"status": "ok", "service": "MedTracker API", "version": "1.0"}
+        return {"status": "ok", "service": "MedTracker API", "version": "V.55"}
 
 # ================== ЗАПУСК ==================
 def run_server():
