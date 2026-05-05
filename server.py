@@ -244,7 +244,7 @@ async def add_medicine(req: AddMedicineRequest):
         if save_data_store(data_store):
             days = calc_days_left(data_store[chat_id][req.name])
             logger.info(f"✅ Added medicine: {req.name}, lasts {days} days")
-            return {"success": True, "message": f"Лекарство добавлено! Хватит на {days} дней", "name": req.name}
+            return {"success": True, "message": f"✅ Лекарство добавлено! Хватит на {days} дней", "name": req.name}
         else:
             logger.error("Failed to save data")
             raise HTTPException(status_code=500, detail="Ошибка сохранения данных")
