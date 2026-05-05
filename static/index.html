@@ -117,6 +117,7 @@
         </div>
     </div>
 
+    <div id="screenMain">
     <div class="flex items-center justify-between mb-6">
         <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] pl-2">Текущий график</h2>
         <button id="addMedBtn" class="bg-violet-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-1 shadow-lg hover:bg-violet-700 transition">
@@ -126,6 +127,23 @@
     </div>
 
     <div id="medsList" class="space-y-4"></div>
+    </div>
+
+    <!-- Экран: Настройка расписания -->
+    <div id="screenSchedule" style="display:none">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] pl-2">Настройка расписания</h2>
+        </div>
+        <div id="scheduleList" class="space-y-4"></div>
+    </div>
+
+    <!-- Экран: Напоминания -->
+    <div id="screenReminders" style="display:none">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] pl-2">Ближайшие напоминания</h2>
+        </div>
+        <div id="remindersList" class="space-y-4"></div>
+    </div>
 
     <!-- Модальное окно добавления лекарства -->
     <div id="addModal" class="modal">
@@ -137,13 +155,13 @@
     <!-- Floating Action Bar -->
     <div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4">
         <div class="glass h-16 rounded-full flex items-center justify-around px-8 shadow-2xl border-t border-white/10">
-            <button id="bottomCalendar" class="text-violet-400">
+            <button id="bottomCalendar" title="Сводка" class="text-violet-400">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
             </button>
-            <button id="bottomSchedule" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+            <button id="bottomSchedule" title="Настройка расписания" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </button>
-            <button id="bottomReminder" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+            <button id="bottomReminder" title="Напоминания о приёме" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </button>
         </div>
@@ -153,6 +171,7 @@
         // Глобальные переменные
         let medsData = [];
         let addWizardStep = 0;
+        const BASE_URL = window.location.origin;
         let addWizardData = {};
 
         const FORM_LABELS = {
@@ -195,7 +214,7 @@
         // ========== API ВЫЗОВЫ ==========
         async function fetchMeds() {
             try {
-                const res = await fetch('/api/meds');
+                const res = await fetch(`${BASE_URL}/api/meds`);
                 if (!res.ok) throw new Error('Network error');
                 medsData = await res.json();
                 updateStats();
@@ -211,7 +230,7 @@
 
         async function takeMed(chatId, medName) {
             try {
-                const res = await fetch('/api/taken', {
+                const res = await fetch(`${BASE_URL}/api/taken`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chat_id: chatId, med_name: medName })
@@ -228,7 +247,7 @@
 
         async function startCourse(chatId, medName) {
             try {
-                const res = await fetch('/api/meds/start', {
+                const res = await fetch(`${BASE_URL}/api/meds/start`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chat_id: chatId, med_name: medName })
@@ -246,7 +265,7 @@
         async function deleteMed(chatId, medName) {
             if (!confirm(`Удалить "${medName}"?`)) return;
             try {
-                const res = await fetch(`/api/meds?chat_id=${chatId}&med_name=${encodeURIComponent(medName)}`, {
+                const res = await fetch(`${BASE_URL}/api/meds?chat_id=${chatId}&med_name=${encodeURIComponent(medName)}`, {
                     method: 'DELETE'
                 });
                 if (res.ok) {
@@ -262,7 +281,7 @@
         async function updateMed(chatId, medName, field, value) {
             const body = field === 'dose' ? { daily_mg: value } : { add_stock: value };
             try {
-                const res = await fetch('/api/meds/update', {
+                const res = await fetch(`${BASE_URL}/api/meds/update`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chat_id: chatId, med_name: medName, ...body })
@@ -646,7 +665,7 @@
 
         async function finishAddWizard() {
             try {
-                const res = await fetch('/api/meds/add', {
+                const res = await fetch(`${BASE_URL}/api/meds/add`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -700,20 +719,109 @@
         const addMedBtnElem = document.getElementById('addMedBtn');
         if (addMedBtnElem) addMedBtnElem.addEventListener('click', showAddWizard);
         
-        const bottomCalendar = document.getElementById('bottomCalendar');
-        if (bottomCalendar) {
-            bottomCalendar.addEventListener('click', () => showToast('📋 Сводка в Telegram-боте'));
+        // ========== НАВИГАЦИЯ МЕЖДУ ЭКРАНАМИ ==========
+        const SCREENS = ['screenMain', 'screenSchedule', 'screenReminders'];
+        
+        function showScreen(id) {
+            SCREENS.forEach(s => {
+                const el = document.getElementById(s);
+                if (el) el.style.display = 'none';
+            });
+            const target = document.getElementById(id);
+            if (target) target.style.display = 'block';
+
+            // Обновить активную иконку
+            document.getElementById('bottomCalendar').classList.toggle('text-violet-400', id === 'screenMain');
+            document.getElementById('bottomCalendar').classList.toggle('text-[var(--text-secondary)]', id !== 'screenMain');
+            document.getElementById('bottomSchedule').classList.toggle('text-violet-400', id === 'screenSchedule');
+            document.getElementById('bottomSchedule').classList.toggle('text-[var(--text-secondary)]', id !== 'screenSchedule');
+            document.getElementById('bottomReminder').classList.toggle('text-violet-400', id === 'screenReminders');
+            document.getElementById('bottomReminder').classList.toggle('text-[var(--text-secondary)]', id !== 'screenReminders');
+
+            if (id === 'screenSchedule') renderScheduleScreen();
+            if (id === 'screenReminders') renderRemindersScreen();
         }
+
+        function renderScheduleScreen() {
+            const container = document.getElementById('scheduleList');
+            if (!container) return;
+            if (!medsData.length) {
+                container.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Нет лекарств в базе</div>';
+                return;
+            }
+            let html = '';
+            for (const med of medsData) {
+                const icon = getFormIcon(med.form);
+                const formColor = getFormColor(med.form);
+                const schedule = med.schedule || 'не указано';
+                html += `<div class="glass rounded-[2rem] p-5">
+                    <div class="flex items-center gap-4 mb-3">
+                        <div class="w-12 h-12 rounded-[1.2rem] flex items-center justify-center text-xl ${formColor}">${icon}</div>
+                        <div>
+                            <div class="font-bold text-[var(--text-primary)] uppercase tracking-tight">${escapeHtml(med.name)}</div>
+                            <div class="text-xs text-[var(--text-secondary)] font-medium">${med.dose_line || ''}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--surface-hover)] px-4 py-2 rounded-xl">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-violet-400 shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span>${escapeHtml(schedule)}</span>
+                    </div>
+                </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        function renderRemindersScreen() {
+            const container = document.getElementById('remindersList');
+            if (!container) return;
+            if (!medsData.length) {
+                container.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Нет лекарств в базе</div>';
+                return;
+            }
+
+            const started = medsData.filter(m => m.is_started);
+            if (!started.length) {
+                container.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Нет активных курсов. Начните курс, чтобы получать напоминания.</div>';
+                return;
+            }
+
+            let html = '';
+            for (const med of started) {
+                const icon = getFormIcon(med.form);
+                const formColor = getFormColor(med.form);
+                const daysLeft = med.days_left;
+                const urgencyClass = daysLeft <= 3 ? 'bg-rose-500/10 text-rose-400' : daysLeft <= 7 ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400';
+                html += `<div class="glass rounded-[2rem] p-5">
+                    <div class="flex items-center gap-4 mb-3">
+                        <div class="w-12 h-12 rounded-[1.2rem] flex items-center justify-center text-xl ${formColor}">${icon}</div>
+                        <div class="flex-1">
+                            <div class="font-bold text-[var(--text-primary)] uppercase tracking-tight">${escapeHtml(med.name)}</div>
+                            <div class="text-xs text-[var(--text-secondary)] font-medium">${med.dose_line || ''}</div>
+                        </div>
+                        <div class="px-3 py-1 rounded-full text-xs font-bold ${urgencyClass}">${daysLeft} дн.</div>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--surface-hover)] px-4 py-2 rounded-xl mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-violet-400 shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span>${escapeHtml(med.schedule || 'расписание не задано')}</span>
+                    </div>
+                    <button onclick="takeMed(${med.chat_id}, '${escapeHtml(med.name).replace(/'/g, "\\'")}'); renderRemindersScreen();" 
+                        class="w-full bg-violet-600 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        Отметить приём
+                    </button>
+                </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        const bottomCalendar = document.getElementById('bottomCalendar');
+        if (bottomCalendar) bottomCalendar.addEventListener('click', () => showScreen('screenMain'));
         
         const bottomSchedule = document.getElementById('bottomSchedule');
-        if (bottomSchedule) {
-            bottomSchedule.addEventListener('click', () => showToast('📅 Настройка расписания в Telegram-боте'));
-        }
+        if (bottomSchedule) bottomSchedule.addEventListener('click', () => showScreen('screenSchedule'));
         
         const bottomReminder = document.getElementById('bottomReminder');
-        if (bottomReminder) {
-            bottomReminder.addEventListener('click', () => showToast('⏰ Напоминания в Telegram-боте'));
-        }
+        if (bottomReminder) bottomReminder.addEventListener('click', () => showScreen('screenReminders'));
         
         const modal = document.getElementById('addModal');
         if (modal) {
