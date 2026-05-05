@@ -682,7 +682,7 @@
                     units: addWizardData.units,
                     daily_mg: addWizardData.daily_mg,
                     course_days: addWizardData.course_days || 0,
-                    chat_id: medsData?.[0]?.chat_id || 1
+                    chat_id: medsData?.[0]?.chat_id ?? 1
                 };
 
                 let res = await fetch(withVersion('/api/meds/add'), {
