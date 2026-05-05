@@ -386,6 +386,10 @@ async def delete_medicine(chat_id: int, med_name: str):
         logger.error(f"Error deleting medicine: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/version")
+async def get_version():
+    return {"version": APP_VERSION}
+
 @app.get("/health")
 async def health_check():
     """Проверка работоспособности"""
