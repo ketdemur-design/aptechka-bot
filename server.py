@@ -12,6 +12,8 @@ import uvicorn
 import pytz
 import logging
 
+from settings import APP_VERSION
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
