@@ -208,6 +208,8 @@ async def add_medicine(req: AddMedicineRequest):
     try:
         data_store = load_data_store()
         chat_id = req.chat_id
+        if chat_id is None:
+            chat_id = next(iter(data_store), 1)
         
         req_name = req.name.strip()
         if not req_name:
