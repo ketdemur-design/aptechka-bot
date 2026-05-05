@@ -13,7 +13,8 @@ from pydantic import BaseModel
 
 # ── Конфигурация ──────────────────────────────────────────────────────────────
 TZ_MOSCOW   = pytz.timezone("Europe/Moscow")
-BOT_VERSION = "1.1.27"
+from settings import APP_VERSION
+BOT_VERSION = APP_VERSION
 DATA_FILE   = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
 
 app = FastAPI(title="MedBot Web API")
@@ -288,7 +289,7 @@ from pydantic import BaseModel
 
 # ── Config ────────────────────────────────────────────────────────────────────
 TZ_MOSCOW = pytz.timezone("Europe/Moscow")
-BOT_VERSION = "1.1.26"
+BOT_VERSION = APP_VERSION
 DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
 
 app = FastAPI(title="MedBot Web API")
@@ -568,7 +569,7 @@ from pydantic import BaseModel
 
 # ── Конфигурация ──────────────────────────────────────────────────────────────
 TZ_MOSCOW = pytz.timezone("Europe/Moscow")
-BOT_VERSION = "1.1.28"
+BOT_VERSION = APP_VERSION
 DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
 
 app = FastAPI(title="MedBot Web API")
