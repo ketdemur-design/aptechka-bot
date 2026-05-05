@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
@@ -25,6 +26,8 @@ logger.info(f"📁 Server использует файл данных: {DATA_FILE
 
 app = FastAPI()
 
+STATIC_DIR = Path(__file__).parent / "static"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,6 +35,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # ================== МОДЕЛИ ==================
 class AddMedicineRequest(BaseModel):
@@ -392,11 +398,11 @@ async def test():
 @app.get("/")
 async def root():
     """Возвращает главную страницу"""
-    index_path = Path(__file__).parent / "index.html"
+    index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
     else:
-        return {"status": "ok", "service": "MedTracker API", "version": "V.55"}
+        return {"status": "ok", "service": "MedTracker API", "version": "V.55", "error": "index.html not found"}
 
 # ================== ЗАПУСК ==================
 def run_server():
@@ -406,7 +412,7 @@ def run_server():
     print(f"\n{'='*50}")
     print(f"🚀 MedTracker API Server")
     print(f"📁 Файл данных: {DATA_FILE.absolute()}")
-    print(f"📄 HTML файл: {Path(__file__).parent / 'index.html'}")
+    print(f"📄 HTML файл: {STATIC_DIR / 'index.html'}")
     print(f"🌐 Адрес: http://{host}:{port}")
     print(f"📊 Health check: http://{host}:{port}/health")
     print(f"🧪 Test endpoint: http://{host}:{port}/test")
