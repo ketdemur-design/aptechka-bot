@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 
 # Используем ТОТ ЖЕ файл, что и в app.py
-DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
+DATA_FILE = Path("/data/meds_data.json")
 
 # Для локальной отладки - если нет /data, используем локальную папку
 if not DATA_FILE.parent.exists():
@@ -39,6 +39,7 @@ app.add_middleware(
 
 # ================== МОДЕЛИ ==================
 class AddMedicineRequest(BaseModel):
+    chat_id: Optional[int] = 1
     name: str
     form: str
     unit_mg: float
