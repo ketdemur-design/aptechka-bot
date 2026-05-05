@@ -4,14 +4,8 @@ import re
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-import uvicorn
-import threading
 import pytz
 from settings import APP_VERSION
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, BotCommand, Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -41,7 +35,8 @@ pending_delayed_tasks = set()
 _write_lock = asyncio.Lock()
 bot_application = None
 
-# В начале app.py, после импортов
+
+# Для локальной отладки
 DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
 
 # Для локальной отладки
@@ -273,184 +268,6 @@ def reminder_action_menu(med_name: str):
         [InlineKeyboardButton("⏰ Напомнить через 30м", callback_data=f"later:30:{med_name}")],
         [InlineKeyboardButton("⏰ Напомнить через 1 час", callback_data=f"later:60:{med_name}")],
     ])
-
-# ================== API ЭНДПОИНТЫ ДЛЯ PWA ==================
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/api/version")
-def api_version():
-    return {"version": APP_VERSION}
-
-@app.get("/api/meds")
-async def get_meds(chat_id: Optional[int] = None):
-    """Получить все лекарства для чата"""
-    if chat_id is None:
-        # Если нет chat_id, берем первый доступный чат
-        if data_store:
-            chat_id = list(data_store.keys())[0]
-        else:
-            return []
-    
-    meds = data_store.get(chat_id, {})
-    result = []
-    for name, med in meds.items():
-        days_left = calc_days_left(med)
-        unit_label, dose_label = get_display_units(med)
-        progress = calculate_progress(med)
-        schedule = format_schedule(med.get("times", {}))
-        
-        result.append({
-            "name": name,
-            "chat_id": chat_id,
-            "form": med.get("form", "tablets"),
-            "daily_mg": med["daily_mg"],
-            "unit_mg": med["unit_mg"],
-            "total_mg": med["total_mg"],
-            "course_days": med.get("course_days", 0),
-            "is_started": med.get("is_started", False),
-            "days_left": days_left,
-            "dose_label": dose_label,
-            "progress": progress,
-            "schedule": schedule,
-            "remaining_doses": int(med["total_mg"] / med["daily_mg"]) if med["daily_mg"] > 0 else 0,
-            "dose_line": f"{med['daily_mg']} {dose_label}/сут"
-        })
-    return result
-
-@app.post("/api/meds/add")
-async def add_medicine(req: AddMedicineRequest):
-    """Добавить новое лекарство"""
-    try:
-        # Определяем chat_id (для PWA используем фиксированный ID 1)
-        chat_id = 1
-        
-        # Пересчёт общего запаса в "мг"
-        if req.form == "drops":
-            total_resource = (req.unit_mg / 0.05) * req.units
-        elif req.form == "spray":
-            total_resource = (req.unit_mg / 0.1) * req.units
-        else:
-            total_resource = req.unit_mg * req.units
-        
-        data_store.setdefault(chat_id, {})[req.name] = {
-            "form": req.form,
-            "daily_mg": req.daily_mg,
-            "unit_mg": req.unit_mg,
-            "total_mg": total_resource,
-            "course_days": req.course_days if req.course_days > 0 else None,
-            "created": get_now(),
-            "is_started": False,
-            "start_date": None,
-            "times": {},
-            "notified": False,
-            "last_reminder_key": None,
-            "last_9am_key": None,
-        }
-        
-        await save_data_store_async()
-        
-        days = calc_days_left(data_store[chat_id][req.name])
-        _, dose_label = get_display_units(data_store[chat_id][req.name])
-
-        # Отправляем подтверждение в Telegram, если бот запущен
-        if bot_application:
-            try:
-                msg = f"✅ Лекарство *{req.name}* успешно добавлено через PWA!\n\nРасход: {req.daily_mg} {dose_label}/сутки\nХватит на: {days} дней"
-                await bot_application.bot.send_message(chat_id, msg, parse_mode="Markdown")
-            except Exception as e:
-                print(f"Ошибка отправки уведомления в Telegram: {e}")
-        
-        return {"success": True, "message": f"✅ Лекарство добавлено! Хватит на {days} дней", "name": req.name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/meds/update")
-async def update_medicine(req: UpdateMedicineRequest):
-    """Обновить дозировку или пополнить запас"""
-    try:
-        if req.chat_id not in data_store or req.med_name not in data_store[req.chat_id]:
-            raise HTTPException(status_code=404, detail="Лекарство не найдено")
-        
-        med = data_store[req.chat_id][req.med_name]
-        
-        if req.daily_mg is not None:
-            med["daily_mg"] = req.daily_mg
-            await save_data_store_async()
-            days = calc_days_left(med)
-            return {"success": True, "message": f"Дозировка изменена! Хватит на {days} дн."}
-        
-        if req.add_stock is not None:
-            form = med.get("form", "tablets")
-            if form == "drops":
-                added = (med["unit_mg"] / 0.05) * req.add_stock
-            elif form == "spray":
-                added = (med["unit_mg"] / 0.1) * req.add_stock
-            else:
-                added = med["unit_mg"] * req.add_stock
-            med["total_mg"] += added
-            med["notified"] = False
-            await save_data_store_async()
-            days = calc_days_left(med)
-            return {"success": True, "message": f"Пополнено! Хватит на {days} дн."}
-        
-        return {"success": True, "message": "Обновлено"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/meds/start")
-async def start_course(req: StartCourseRequest):
-    """Начать курс лекарства"""
-    try:
-        if req.chat_id not in data_store or req.med_name not in data_store[req.chat_id]:
-            raise HTTPException(status_code=404, detail="Лекарство не найдено")
-        
-        med = data_store[req.chat_id][req.med_name]
-        med["is_started"] = True
-        med["start_date"] = get_now()
-        await save_data_store_async()
-        
-        return {"success": True, "message": f"Курс «{req.med_name}» начат!"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/taken")
-async def mark_taken(req: TakenRequest):
-    """Отметить приём лекарства"""
-    try:
-        if req.chat_id in data_store and req.med_name in data_store[req.chat_id]:
-            # Обновляем запас
-            med = data_store[req.chat_id][req.med_name]
-            times_dict = med.get("times", {})
-            doses_count = 1
-            for times in times_dict.values():
-                if times:
-                    doses_count = max(doses_count, len(times))
-            per_dose = med["daily_mg"] / doses_count if doses_count > 0 else med["daily_mg"]
-            med["total_mg"] -= per_dose
-            await save_data_store_async()
-        return {"success": True, "message": "Приём отмечен"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/meds")
-async def delete_medicine(chat_id: int, med_name: str):
-    """Удалить лекарство"""
-    try:
-        if chat_id in data_store and med_name in data_store[chat_id]:
-            del data_store[chat_id][med_name]
-            await save_data_store_async()
-            return {"success": True, "message": "Лекарство удалено"}
-        raise HTTPException(status_code=404, detail="Лекарство не найдено")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 # ================== ТЕЛЕГРАМ БОТ ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -861,28 +678,14 @@ async def post_init(application):
     asyncio.create_task(reminder_loop())
     print(f"Бот v{BOT_VERSION} инициализирован. DATA_FILE={DATA_FILE}")
 
-def run_bot():
-    """Запуск Telegram бота в отдельном потоке"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
+def main():
     app_bot = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     app_bot.add_handler(CommandHandler("start", start))
     app_bot.add_handler(CallbackQueryHandler(buttons))
     app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-    
+
     print(f"Telegram бот v{BOT_VERSION} запускается...")
     app_bot.run_polling(drop_pending_updates=True)
-
-def main():
-    # Запускаем Telegram бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    
-    # Запускаем FastAPI сервер
-    port = int(os.getenv("PORT", 3000))
-    print(f"FastAPI сервер запускается на порту {port}")
-    uvicorn.run(app, host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
     main()
