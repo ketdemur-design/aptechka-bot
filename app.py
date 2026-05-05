@@ -22,7 +22,7 @@ from telegram.ext import (
 # Версия приложения (меняйте в settings.py или через APP_VERSION в окружении)
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 BOT_VERSION = APP_VERSION
-DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
+DATA_FILE = Path("meds_data.json")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -37,11 +37,9 @@ bot_application = None
 
 
 # Для локальной отладки
-DATA_FILE = Path(os.getenv("DATA_FILE", "/data/meds_data.json"))
+DATA_FILE = Path("meds_data.json")
 
 # Для локальной отладки
-if not DATA_FILE.parent.exists():
-    DATA_FILE = Path("meds_data.json")
 
 print(f"🤖 Бот использует файл данных: {DATA_FILE.absolute()}")
 
