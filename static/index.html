@@ -674,18 +674,30 @@
 
         async function finishAddWizard() {
             try {
-                const res = await fetch(`${BASE_URL}/api/meds/add`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: addWizardData.name,
-                        form: addWizardData.form,
-                        unit_mg: addWizardData.unit_mg,
-                        units: addWizardData.units,
-                        daily_mg: addWizardData.daily_mg,
-                        course_days: addWizardData.course_days || 0
-                    })
-                });
+                const payload = {
+                    name: addWizardData.name,
+                    form: addWizardData.form,
+                    unit_mg: addWizardData.unit_mg,
+                    units: addWizardData.units,
+                    daily_mg: addWizardData.daily_mg,
+                    course_days: addWizardData.course_days || 0
+                };
+
+                let res;
+                try {
+                    res = await fetch(withVersion(`${BASE_URL}/api/meds/add`), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (primaryErr) {
+                    console.warn('Primary add endpoint failed, retrying relative URL', primaryErr);
+                    res = await fetch(withVersion('/api/meds/add'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                }
                 
                 if (res.ok) {
                     showToast('✅ Лекарство успешно добавлено!');
@@ -704,7 +716,7 @@
                 }
             } catch (err) {
                 console.error(err);
-                showToast('❌ Ошибка соединения с сервером', true);
+                showToast(`❌ Ошибка соединения с сервером (v${APP_VERSION})`, true);
             }
         }
 
