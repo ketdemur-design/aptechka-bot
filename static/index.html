@@ -370,8 +370,19 @@
                 const formColor = getFormColor(med.form);
                 const isStarted = med.is_started;
                 const daysLeft = med.days_left;
-                const remainingDoses = med.remaining_doses || 0;
-                const doseLabel = med.dose_label || 'мг';
+                const remainingUnits = Number.isFinite(Number(med.remaining_units)) ? Number(med.remaining_units) : 0;
+                const dailyUnits = Number.isFinite(Number(med.daily_units)) ? Number(med.daily_units) : 0;
+                const unitName = med.unit_name || 'ед.';
+                const remainingUnitsText = Number.isInteger(remainingUnits) ? remainingUnits.toString() : remainingUnits.toFixed(2).replace(/\.00$/, '');
+                const dailyUnitsText = Number.isInteger(dailyUnits) ? dailyUnits.toString() : dailyUnits.toFixed(2).replace(/\.00$/, '');
+                const courseIndicator = med.course_days === 0
+                    ? `● ЗАПАС: ${remainingUnitsText} ${unitName}`
+                    : (med.is_enough
+                        ? '● НА КУРС ХВАТИТ'
+                        : '● НА КУРС НЕ ХВАТИТ');
+                const courseIndicatorClass = med.course_days === 0 || med.is_enough
+                    ? 'text-emerald-500'
+                    : 'text-rose-500';
 
                 html += `<div class="glass rounded-[2.5rem] p-6 relative overflow-hidden group hover:border-white/10 transition-colors">
                     <div class="flex items-start justify-between mb-4">
@@ -382,7 +393,7 @@
                             <div>
                                 <h3 class="font-bold text-lg text-[var(--text-primary)] uppercase tracking-tight">${escapeHtml(med.name)}</h3>
                                 <div class="flex items-center gap-2">
-                                    <p class="text-[var(--text-secondary)] text-sm font-medium">${med.dose_line || ''}</p>
+                                    <p class="text-[var(--text-secondary)] text-sm font-medium">${dailyUnitsText} ${unitName}/сутки</p>
                                     <div class="w-1 h-1 rounded-full bg-[var(--text-secondary)]/30"></div>
                                     <p class="text-[var(--text-secondary)] text-[11px] font-bold uppercase tracking-wider">${med.course_days === 0 ? 'Пожизненно' : `Курс: ${med.course_days} дн.`}</p>
                                 </div>
@@ -407,6 +418,7 @@
                                 <div class="w-3 h-3 rounded-full bg-white/30 backdrop-blur-md border border-white/40 shadow-sm flex items-center justify-center shrink-0"><div class="w-1 h-1 rounded-full bg-white/90 shadow-sm"></div></div>
                             </div>
                         </div>
+                        <div class="mt-2 text-[11px] font-extrabold uppercase tracking-tight ${courseIndicatorClass}">${courseIndicator}</div>
                     </div>
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-2 text-[var(--text-secondary)] text-xs font-bold btn-secondary px-4 py-2 rounded-2xl border border-white/10">
@@ -414,7 +426,7 @@
                             ${med.schedule || 'не указано'}
                         </div>
                         <div class="flex flex-col items-end gap-1">
-                            <div class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl ${daysLeft <= 3 ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}">Запас: ${remainingDoses} ${doseLabel}</div>
+                            <div class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl ${daysLeft <= 3 ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}">Запас: ${remainingUnitsText} ${unitName}</div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3 mb-4">
