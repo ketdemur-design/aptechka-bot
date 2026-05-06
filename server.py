@@ -164,6 +164,33 @@ def calculate_progress(med):
     progress = min(100, int((days_passed / course_days) * 100))
     return max(0, progress)
 
+def get_unit_name(form):
+    unit_map = {
+        "tablets": "табл.",
+        "capsules": "капс.",
+        "liquid": "мл",
+        "drops": "кап.",
+        "spray": "впрыск."
+    }
+    return unit_map.get(form, "ед.")
+
+def calculate_remaining_units(med):
+    form = med.get("form", "tablets")
+    total_mg = med.get("total_mg", 0) or 0
+    unit_mg = med.get("unit_mg", 0) or 0
+    if form in ("drops", "spray"):
+        return total_mg
+    if unit_mg <= 0:
+        return 0
+    return total_mg / unit_mg
+
+def calculate_daily_units(med):
+    daily_mg = med.get("daily_mg", 0) or 0
+    unit_mg = med.get("unit_mg", 0) or 0
+    if unit_mg <= 0:
+        return 0
+    return daily_mg / unit_mg
+
 # ================== API ЭНДПОИНТЫ ==================
 @app.get("/api/meds")
 async def get_meds(chat_id: Optional[int] = None):
@@ -185,20 +212,43 @@ async def get_meds(chat_id: Optional[int] = None):
         _, dose_label = get_display_units(med)
         progress = calculate_progress(med)
         schedule = format_schedule(med.get("times", {}))
+        form = med.get("form", "tablets")
+        remaining_units = calculate_remaining_units(med)
+        daily_units = calculate_daily_units(med)
+        unit_name = get_unit_name(form)
+        course_days = med.get("course_days", 0) or 0
+        is_enough = True
+        if course_days > 0 and med.get("is_started") and med.get("start_date"):
+            start_dt = med["start_date"]
+            if isinstance(start_dt, str):
+                try:
+                    start_dt = datetime.fromisoformat(start_dt)
+                    if start_dt.tzinfo is None:
+                        start_dt = TZ_MOSCOW.localize(start_dt)
+                except:
+                    start_dt = None
+            if start_dt:
+                days_passed = max(0, (get_now() - start_dt).days)
+                course_days_left = max(0, course_days - days_passed)
+                is_enough = days_left >= course_days_left
         
         result.append({
             "name": name,
             "chat_id": chat_id,
-            "form": med.get("form", "tablets"),
+            "form": form,
             "daily_mg": med.get("daily_mg", 0),
             "unit_mg": med.get("unit_mg", 0),
             "total_mg": med.get("total_mg", 0),
-            "course_days": med.get("course_days", 0) or 0,
+            "course_days": course_days,
             "is_started": med.get("is_started", False),
             "days_left": days_left,
             "dose_label": dose_label,
             "progress": progress,
             "schedule": schedule,
+            "remaining_units": round(remaining_units, 2),
+            "daily_units": round(daily_units, 2),
+            "unit_name": unit_name,
+            "is_enough": is_enough,
             "remaining_doses": int(med.get("total_mg", 0) / med.get("daily_mg", 1)) if med.get("daily_mg", 0) > 0 else 0,
             "dose_line": f"{med.get('daily_mg', 0)} {dose_label}/сут"
         })
