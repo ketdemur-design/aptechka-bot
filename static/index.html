@@ -7,15 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-        * { font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; }
-        body {
-            background: var(--bg);
-            color: var(--text-primary);
-            transition: background-color 0.3s ease, color 0.3s ease;
-            background-image: radial-gradient(circle at 100% 0%, rgba(99,102,241,0.15) 0%, transparent 50%),
-                              radial-gradient(circle at 0% 100%, rgba(168,85,247,0.1) 0%, transparent 50%);
-            background-attachment: fixed;
-        }
+
+        *, *::before, *::after { font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; }
+
+        /* ── CSS VARIABLES ── */
         :root {
             --bg: #e2e8f0;
             --surface: #ffffff;
@@ -32,9 +27,24 @@
             --text-primary: #ffffff;
             --text-secondary: #94a3b8;
         }
+
+        /* ── BODY ── */
+        body {
+            background-color: var(--bg);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            background-image:
+                radial-gradient(circle at 100% 0%, rgba(99,102,241,0.15) 0%, transparent 50%),
+                radial-gradient(circle at 0% 100%, rgba(168,85,247,0.1) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* ── GLASS ── */
         .glass {
             background: var(--surface);
-            backdrop-filter: blur(12px);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
             border: 1px solid rgba(255,255,255,0.05);
             box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05);
         }
@@ -44,844 +54,783 @@
         }
         .card-shadow { box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05); }
         .dark .card-shadow { box-shadow: 0 20px 40px -12px rgba(0,0,0,0.5); }
-        .progress-bar {
-            transition: width 0.8s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+
+        /* ── SHIMMER (skeleton loader) ── */
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(139,92,246,0.05), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
         }
+        @keyframes shimmer {
+            0%   { background-position: -200% 0; }
+            100% { background-position:  200% 0; }
+        }
+
+        /* ── PROGRESS BAR ── */
+        .progress-bar {
+            transition: width 1s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+        }
+
+        /* glow on the fill */
+        .pb-green  { background: linear-gradient(to right, #86efac, #22c55e, #10b981); box-shadow: 0 0 40px rgba(34,197,94,0.7); }
+        .pb-amber  { background: linear-gradient(to right, #facc15, #f59e0b, #f97316); box-shadow: 0 0 30px rgba(245,158,11,0.9); }
+        .pb-red    { background: linear-gradient(to right, #ef4444, #f43f5e, #e11d48); box-shadow: 0 0 35px rgba(225,29,72,0.7); }
+        .dark .pb-green  { background: linear-gradient(to right, #34d399, #10b981, #059669); box-shadow: 0 0 15px rgba(16,185,129,0.3); }
+        .dark .pb-amber  { background: linear-gradient(to right, #facc15, #f59e0b, #d97706); box-shadow: 0 0 15px rgba(245,158,11,0.4); }
+        .dark .pb-red    { background: linear-gradient(to right, #f97316, #f43f5e, #e11d48); box-shadow: 0 0 25px rgba(255,0,0,0.5); }
+
+        /* critical track glow */
+        .pb-track-critical {
+            box-shadow: 0 0 20px rgba(244,63,94,0.3) !important;
+            border-color: rgba(244,63,94,0.3) !important;
+        }
+
+        /* ── PULSE BADGE ── */
+        @keyframes pulse-badge {
+            0%,100% { opacity:1; transform:scale(1); }
+            50%      { opacity:.75; transform:scale(1.03); }
+        }
+        .pulse-badge { animation: pulse-badge 1.5s ease-in-out infinite; }
+
+        /* ── REMIND DROPDOWN ── */
+        .remind-panel {
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.35s ease, opacity 0.25s ease;
+        }
+        .remind-panel.open { max-height: 160px; opacity: 1; }
+
+        /* ── MODAL ── */
         .modal {
             display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            backdrop-filter: blur(4px);
-            align-items: center;
-            justify-content: center;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(6px);
+            align-items: center; justify-content: center;
             z-index: 50;
         }
         .modal.active { display: flex; }
         .modal-content {
             background: var(--surface);
             border-radius: 2rem;
-            max-width: 90%;
-            width: 400px;
+            width: min(400px, 92vw);
             padding: 1.5rem;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.3);
         }
+
+        /* ── TOAST ── */
         @keyframes slideUp {
-            from { opacity: 0; transform: translate(-50%, 20px); }
-            to { opacity: 1; transform: translate(-50%, 0); }
+            from { opacity:0; transform:translate(-50%,20px); }
+            to   { opacity:1; transform:translate(-50%,0); }
         }
-        .toast-notification {
-            animation: slideUp 0.3s ease-out;
-        }
-        button {
-            cursor: pointer;
-        }
+        .toast { animation: slideUp 0.3s ease-out; }
+
+        button { cursor: pointer; }
+
+        /* card title hover */
+        .med-card:hover .med-title { color: #8b5cf6; }
+
+        /* refresh spin */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinning { animation: spin 0.7s linear infinite; }
     </style>
 </head>
-<body class="pb-20 px-4 pt-8 max-w-lg mx-auto">
-    <header class="flex items-center justify-between mb-10">
-        <div>
-            <div class="flex items-end gap-2">
-                <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)] bg-clip-text text-transparent">
-                    Мои лекарства
-                </h1>
-                <span id="appVersionLabel" class="text-[10px] font-thin text-[var(--text-secondary)] mb-1">—</span>
-            </div>
-            <p class="text-[var(--text-secondary)] text-sm font-medium mt-1">Будьте здоровы и не пропускайте приём</p>
-        </div>
-        <div class="flex items-center gap-2">
-            <button id="themeToggle" class="p-2.5 glass rounded-2xl hover:bg-[var(--surface-hover)] transition-colors group">
-                <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-            </button>
-            <button id="refreshBtn" class="p-2.5 glass rounded-2xl hover:bg-[var(--surface-hover)] transition-colors group">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-            </button>
-        </div>
-    </header>
+<body class="pb-24 px-4 pt-8 max-w-lg mx-auto min-h-screen">
 
-    <div class="grid grid-cols-2 gap-4 mb-8">
-        <div class="glass p-5 rounded-[2rem] card-shadow">
-            <div class="flex items-center gap-3 mb-2">
-                <div class="p-2 bg-emerald-400/10 rounded-xl text-emerald-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                </div>
-                <span class="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-wider">Активные</span>
-            </div>
-            <div id="activeCount" class="text-3xl font-bold text-[var(--text-primary)]">0</div>
+<!-- ══════════════ HEADER ══════════════ -->
+<header class="flex items-center justify-between mb-10">
+    <div>
+        <div class="flex items-end gap-2">
+            <h1 class="text-3xl font-extrabold tracking-tight"
+                style="background:linear-gradient(to right,var(--text-primary),var(--text-secondary));
+                       -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+                Мои лекарства
+            </h1>
+            <span id="appVersionLabel" class="text-[10px] font-thin mb-1" style="color:var(--text-secondary)">—</span>
         </div>
-        <div class="glass p-5 rounded-[2rem] card-shadow">
-            <div class="flex items-center gap-3 mb-2">
-                <div class="p-2 bg-amber-400/10 rounded-xl text-amber-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
-                </div>
-                <span class="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-wider">Заканчиваются</span>
-            </div>
-            <div id="expiringCount" class="text-3xl font-bold text-[var(--text-primary)]">0</div>
-        </div>
+        <p class="text-sm font-medium mt-1" style="color:var(--text-secondary)">Будьте здоровы и не пропускайте приём</p>
     </div>
+    <div class="flex items-center gap-2">
+        <button id="themeToggle" class="p-2.5 glass rounded-2xl transition-colors hover:opacity-80" style="color:var(--text-primary)">
+            <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"/>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            </svg>
+        </button>
+        <button id="refreshBtn" class="p-2.5 glass rounded-2xl transition-colors hover:opacity-80" style="color:var(--text-primary)">
+            <svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                <path d="M8 16H3v5"/>
+            </svg>
+        </button>
+    </div>
+</header>
 
-    <div id="screenMain">
+<!-- ══════════════ STATS ══════════════ -->
+<div class="grid grid-cols-2 gap-4 mb-8">
+    <div class="glass p-5 rounded-[2rem] card-shadow">
+        <div class="flex items-center gap-3 mb-2">
+            <div class="p-2 rounded-xl" style="background:rgba(52,211,153,0.1);color:#34d399">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-secondary)">Активные</span>
+        </div>
+        <div id="activeCount" class="text-3xl font-bold" style="color:var(--text-primary)">0</div>
+    </div>
+    <div class="glass p-5 rounded-[2rem] card-shadow">
+        <div class="flex items-center gap-3 mb-2">
+            <div class="p-2 rounded-xl" style="background:rgba(251,191,36,0.1);color:#fbbf24">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+            </div>
+            <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-secondary)">Заканчиваются</span>
+        </div>
+        <div id="expiringCount" class="text-3xl font-bold" style="color:var(--text-primary)">0</div>
+    </div>
+</div>
+
+<!-- ══════════════ SCREEN: MAIN ══════════════ -->
+<div id="screenMain">
     <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] pl-2">Текущий график</h2>
-        <button id="addMedBtn" class="bg-violet-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-1 shadow-lg hover:bg-violet-700 transition">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        <h2 class="text-xs font-bold uppercase tracking-[0.2em] pl-2" style="color:var(--text-secondary)">Текущий график</h2>
+        <button id="addMedBtn"
+            class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold text-white active:scale-95 transition-all"
+            style="background:#7c3aed;box-shadow:0 4px 14px rgba(124,58,237,0.4)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
             Добавить
         </button>
     </div>
-
     <div id="medsList" class="space-y-4"></div>
-    </div>
+</div>
 
-    <!-- Экран: Настройка расписания -->
-    <div id="screenSchedule" style="display:none">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] pl-2">Настройка расписания</h2>
+<!-- ══════════════ SCREEN: SCHEDULE ══════════════ -->
+<div id="screenSchedule" style="display:none">
+    <div class="mb-6">
+        <h2 class="text-xs font-bold uppercase tracking-[0.2em] pl-2" style="color:var(--text-secondary)">Настройка расписания</h2>
+    </div>
+    <div id="scheduleList" class="space-y-4"></div>
+</div>
+
+<!-- ══════════════ SCREEN: REMINDERS ══════════════ -->
+<div id="screenReminders" style="display:none">
+    <div class="mb-6">
+        <h2 class="text-xs font-bold uppercase tracking-[0.2em] pl-2" style="color:var(--text-secondary)">Ближайшие напоминания</h2>
+    </div>
+    <div id="remindersList" class="space-y-4"></div>
+</div>
+
+<!-- ══════════════ ADD MODAL ══════════════ -->
+<div id="addModal" class="modal">
+    <div class="modal-content">
+        <div id="wizardContent"></div>
+    </div>
+</div>
+
+<!-- ══════════════ BOTTOM NAV ══════════════ -->
+<div class="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4 z-40">
+    <div class="glass h-16 rounded-full flex items-center justify-around px-8 shadow-2xl"
+         style="border-top:1px solid rgba(255,255,255,0.1);">
+        <button id="bottomCalendar" class="transition-colors" style="color:#a78bfa">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </button>
+        <button id="bottomSchedule" class="transition-colors" style="color:var(--text-secondary)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </button>
+        <button id="bottomReminder" class="transition-colors" style="color:var(--text-secondary)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════ SCRIPTS ══════════════ -->
+<script>
+// ── globals ──
+let medsData = [];
+let addWizardStep = 0, addWizardData = {};
+const BASE_URL = window.location.origin;
+let APP_VERSION = "—";
+function withVersion(u){ return u + (u.includes('?')?'&':'?') + 'v=' + encodeURIComponent(APP_VERSION); }
+
+const FORM_LABELS = {
+    tablets:["таблетке","таблеток"], capsules:["капсуле","капсул"],
+    liquid:["бутылке","бутылок"],   drops:["флаконе","флаконов"],
+    spray:["флаконе","флаконов"],   sachet:["саше","саше"]
+};
+
+// ── helpers ──
+function esc(s){ if(!s)return''; return s.replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+
+function showToast(msg, err=false){
+    document.querySelector('.toast')?.remove();
+    const t=document.createElement('div');
+    t.className=`toast fixed bottom-28 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-white text-sm font-bold z-50 shadow-2xl`;
+    t.style.cssText=`background:${err?'#e11d48':'#10b981'};white-space:nowrap;`;
+    t.textContent=msg;
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.transition='all .3s'; t.style.opacity='0'; t.style.transform='translate(-50%,20px)'; setTimeout(()=>t.remove(),300); },3000);
+}
+
+function icon(form){
+    return {tablets:'💊',capsules:'💊',drops:'💧',spray:'💨',liquid:'🧴',sachet:'📦'}[form]||'💊';
+}
+
+// form icon bg — matches FORM_COLORS from App(2).tsx exactly
+function formCls(form){
+    const map={
+        tablets: 'bg-violet-100 text-violet-600 ring-1 ring-violet-200/50',
+        capsules:'bg-purple-100 text-purple-600 ring-1 ring-purple-200/50',
+        drops:   'bg-emerald-100 text-emerald-600 ring-1 ring-emerald-200/50',
+        spray:   'bg-amber-100 text-amber-600 ring-1 ring-amber-200/50',
+        liquid:  'bg-sky-100 text-sky-600 ring-1 ring-sky-200/50',
+        sachet:  'bg-rose-100 text-rose-600 ring-1 ring-rose-200/50',
+    };
+    return map[form]||'bg-slate-100 text-slate-600';
+}
+function formClsDark(form){
+    const map={
+        tablets: 'dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-400/30',
+        capsules:'dark:bg-purple-500/10 dark:text-purple-400 dark:ring-purple-400/30',
+        drops:   'dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/30',
+        spray:   'dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-400/30',
+        liquid:  'dark:bg-sky-500/10 dark:text-sky-400 dark:ring-sky-400/30',
+        sachet:  'dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/30',
+    };
+    return map[form]||'dark:bg-slate-800/50 dark:text-slate-400';
+}
+
+// ── API ──
+async function fetchMeds(){
+    const ri=document.getElementById('refreshIcon');
+    if(ri) ri.classList.add('spinning');
+    try{
+        const r=await fetch(`${BASE_URL}/api/meds`);
+        if(!r.ok) throw new Error();
+        medsData=await r.json();
+        updateStats(); renderMeds();
+    }catch{
+        const c=document.getElementById('medsList');
+        if(c) c.innerHTML='<p class="text-center py-10" style="color:var(--text-secondary)">Ошибка загрузки</p>';
+    }finally{
+        if(ri) ri.classList.remove('spinning');
+    }
+}
+
+async function takeMed(chatId,name){
+    try{
+        const r=await fetch(`${BASE_URL}/api/taken`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,med_name:name})});
+        if(r.ok){ showToast('✅ Приём отмечен!'); await fetchMeds(); }
+    }catch{ showToast('❌ Ошибка',true); }
+}
+async function startCourse(chatId,name){
+    try{
+        const r=await fetch(`${BASE_URL}/api/meds/start`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,med_name:name})});
+        if(r.ok){ showToast(`✅ Курс "${name}" начат!`); await fetchMeds(); }
+    }catch{ showToast('❌ Ошибка',true); }
+}
+async function deleteMed(chatId,name){
+    if(!confirm(`Удалить "${name}"?`)) return;
+    try{
+        const r=await fetch(`${BASE_URL}/api/meds?chat_id=${chatId}&med_name=${encodeURIComponent(name)}`,{method:'DELETE'});
+        if(r.ok){ showToast('🗑 Лекарство удалено'); await fetchMeds(); }
+    }catch{ showToast('❌ Ошибка',true); }
+}
+async function updateMed(chatId,name,field,value){
+    const body=field==='dose'?{daily_mg:value}:{add_stock:value};
+    try{
+        const r=await fetch(`${BASE_URL}/api/meds/update`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,med_name:name,...body})});
+        if(r.ok){ const d=await r.json(); showToast(d.message||'✅ Обновлено'); await fetchMeds(); }
+    }catch{ showToast('❌ Ошибка',true); }
+}
+
+window.handleRefill=function(id,n){
+    const v=prompt('Введите количество для пополнения (в единицах лекарства):');
+    if(v&&!isNaN(parseFloat(v))) updateMed(id,n,'refill',parseFloat(v));
+};
+window.handleChangeDose=function(id,n){
+    const v=prompt('Введите новую суточную дозировку:');
+    if(v&&!isNaN(parseFloat(v))) updateMed(id,n,'dose',parseFloat(v));
+};
+window.deleteMed=deleteMed; window.startCourse=startCourse; window.takeMed=takeMed;
+
+// ── stats ──
+function updateStats(){
+    const a=medsData.filter(m=>m.is_started).length;
+    const e=medsData.filter(m=>m.days_left<=7&&m.days_left>0).length;
+    document.getElementById('activeCount').textContent=a;
+    document.getElementById('expiringCount').textContent=e;
+}
+
+// ── skeleton ──
+function showSkeleton(){
+    const c=document.getElementById('medsList');
+    if(c) c.innerHTML=[0,1,2].map(()=>`<div class="glass h-44 rounded-[2.5rem] shimmer"></div>`).join('');
+}
+
+// ── toggle reminder ──
+function toggleRemind(id){
+    const el=document.getElementById(id);
+    if(el) el.classList.toggle('open');
+}
+function setRemind(label,id){
+    showToast(`⏰ Напоминание через ${label}`);
+    const el=document.getElementById(id);
+    if(el) el.classList.remove('open');
+}
+
+// ── RENDER MEDS ──
+function renderMeds(){
+    const container=document.getElementById('medsList');
+    if(!container) return;
+
+    if(!medsData.length){
+        container.innerHTML=`<div class="text-center py-20">
+            <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style="background:var(--surface-hover)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.4;color:var(--text-secondary)"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            </div>
+            <p style="color:var(--text-secondary)" class="font-medium">Лекарства не найдены.<br>Нажмите «Добавить»</p>
+        </div>`;
+        return;
+    }
+
+    let html='';
+    for(const med of medsData){
+        const p       = med.progress || 0;
+        const isCrit  = p >= 80;
+        const isWarn  = p >= 50;
+
+        // fill class — light vs dark handled via CSS
+        const fillCls = isCrit ? 'pb-red' : isWarn ? 'pb-amber' : 'pb-green';
+
+        // text colour for % label
+        const pColor  = isCrit ? '#f43f5e' : isWarn ? '#f59e0b' : '#10b981';
+
+        // track glow class
+        const trackGlow = isCrit ? 'pb-track-critical' : '';
+
+        const isStarted = med.is_started;
+        const dl        = med.days_left;
+
+        const remUnits  = Number.isFinite(+med.remaining_units) ? +med.remaining_units : 0;
+        const dlyUnits  = Number.isFinite(+med.daily_units)     ? +med.daily_units     : 0;
+        const unitName  = med.unit_name || 'ед.';
+        const remTxt    = Number.isInteger(remUnits) ? remUnits : remUnits.toFixed(2).replace(/\.00$/,'');
+        const dlyTxt    = Number.isInteger(dlyUnits) ? dlyUnits : dlyUnits.toFixed(2).replace(/\.00$/,'');
+
+        const progLabel = med.course_days === 0 ? 'ЗАПАС ЛЕКАРСТВА' : 'ПРОГРЕСС КУРСА';
+        const courseInd = med.course_days === 0
+            ? `● ЗАПАС: ${remTxt} ${unitName}`
+            : (med.is_enough ? '● НА КУРС ХВАТИТ' : '● НА КУРС НЕ ХВАТИТ');
+        const courseColor = (med.course_days===0||med.is_enough) ? '#10b981' : '#f43f5e';
+
+        // low-stock badge style
+        const stockBadge = dl <= 3
+            ? `class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl pulse-badge text-white" style="background:#f43f5e;box-shadow:0 0 15px rgba(244,63,94,0.4)"`
+            : `class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl" style="background:var(--surface-hover);color:var(--text-secondary)"`;
+
+        // safe name for inline JS
+        const sn = esc(med.name).replace(/'/g,"\\'");
+        // reminder dropdown id (no spaces/special chars)
+        const rid = `remind-${med.chat_id}-${med.name.replace(/[^a-zA-Zа-яА-Я0-9]/g,'_')}`;
+
+        html += `
+<div class="glass rounded-[2.5rem] p-6 relative overflow-hidden med-card group" style="transition:border-color .2s">
+
+    <!-- top row -->
+    <div class="flex items-start justify-between mb-4">
+        <div class="flex items-center gap-4">
+            <!-- form icon -->
+            <div class="w-14 h-14 rounded-[1.5rem] flex items-center justify-center relative shadow-lg ${formCls(med.form)} ${formClsDark(med.form)}" style="flex-shrink:0">
+                <div class="absolute inset-0 rounded-[1.5rem] pointer-events-none" style="background:linear-gradient(135deg,rgba(255,255,255,0.4) 0%,rgba(255,255,255,0) 50%,rgba(0,0,0,0.1) 100%)"></div>
+                <span class="relative z-10 text-2xl">${icon(med.form)}</span>
+            </div>
+            <div>
+                <h3 class="med-title font-bold text-lg uppercase tracking-tight transition-colors" style="color:var(--text-primary)">${esc(med.name)}</h3>
+                <div class="flex items-center gap-2 mt-0.5">
+                    <p class="text-sm font-medium" style="color:var(--text-secondary)">${dlyTxt} ${unitName}/сутки</p>
+                    <div class="w-1 h-1 rounded-full" style="background:rgba(148,163,184,.35)"></div>
+                    <p class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--text-secondary)">${med.course_days===0?'Пожизненно':`Курс: ${med.course_days} дн.`}</p>
+                </div>
+            </div>
         </div>
-        <div id="scheduleList" class="space-y-4"></div>
-    </div>
-
-    <!-- Экран: Напоминания -->
-    <div id="screenReminders" style="display:none">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] pl-2">Ближайшие напоминания</h2>
-        </div>
-        <div id="remindersList" class="space-y-4"></div>
-    </div>
-
-    <!-- Модальное окно добавления лекарства -->
-    <div id="addModal" class="modal">
-        <div class="modal-content">
-            <div id="wizardContent"></div>
-        </div>
-    </div>
-
-    <!-- Floating Action Bar -->
-    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4">
-        <div class="glass h-16 rounded-full flex items-center justify-around px-8 shadow-2xl border-t border-white/10">
-            <button id="bottomCalendar" title="Сводка" class="text-violet-400">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        <!-- badges + delete -->
+        <div class="flex flex-col items-end gap-2">
+            <button onclick="deleteMed(${med.chat_id},'${sn}')"
+                class="p-2 rounded-xl transition-all"
+                style="color:rgba(244,63,94,.55)"
+                onmouseover="this.style.color='#f43f5e';this.style.background='rgba(244,63,94,.1)'"
+                onmouseout="this.style.color='rgba(244,63,94,.55)';this.style.background=''">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 4V3c0-1 1-2 2-2h4c1 0 2 1 2 2v1"/></svg>
             </button>
-            <button id="bottomSchedule" title="Настройка расписания" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </button>
-            <button id="bottomReminder" title="Напоминания о приёме" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </button>
+            <div class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${dl<=7?'bg-rose-500/10 text-rose-400':'bg-emerald-500/10 text-emerald-400'}">${dl} дн. ост.</div>
+            ${isStarted?`<div class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tighter flex items-center gap-1" style="background:rgba(16,185,129,.1);color:#10b981"><div class="w-1 h-1 rounded-full animate-pulse" style="background:#10b981"></div>КУРС НАЧАТ</div>`:''}
         </div>
     </div>
 
-    <script>
-        // Глобальные переменные
-        let medsData = [];
-        let addWizardStep = 0;
-        const BASE_URL = window.location.origin;
-        const DEFAULT_APP_VERSION = "—";
-        let APP_VERSION = DEFAULT_APP_VERSION;
+    <!-- progress -->
+    <div class="mb-6">
+        <div class="flex justify-between text-[11px] font-extrabold uppercase tracking-widest mb-3" style="color:var(--text-secondary)">
+            <span class="flex items-center gap-1.5 opacity-90">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${pColor}" stroke-width="2.5"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+                ${progLabel}
+            </span>
+            <span class="text-sm font-black" style="color:${pColor}">${p}%</span>
+        </div>
+        <!-- track -->
+        <div class="h-6 w-full rounded-full relative p-1 border shadow-inner ${trackGlow}"
+             style="background:rgba(148,163,184,.15);border-color:rgba(0,0,0,.03);overflow:hidden">
+            <!-- fill — starts at 0, animated to target after paint -->
+            <div class="progress-bar h-full rounded-full ${fillCls} relative flex items-center justify-end pr-0.5"
+                 data-progress="${p}" style="width:0%">
+                <!-- gloss -->
+                <div class="absolute inset-x-0 top-0 h-1/2 rounded-t-full pointer-events-none" style="background:rgba(255,255,255,.22)"></div>
+                <!-- end dot -->
+                <div class="w-3 h-3 rounded-full border border-white/40 shadow-sm flex items-center justify-center shrink-0"
+                     style="background:rgba(255,255,255,.3);backdrop-filter:blur(4px)">
+                    <div class="w-1 h-1 rounded-full" style="background:rgba(255,255,255,.9)"></div>
+                </div>
+            </div>
+        </div>
+        ${isCrit?'<p class="text-[10px] font-bold mt-2 uppercase tracking-tighter text-right" style="color:#f43f5e">Запас почти исчерпан!</p>':''}
+        <div class="mt-2 text-[11px] font-extrabold uppercase tracking-tight" style="color:${courseColor}">${courseInd}</div>
+    </div>
 
-        function withVersion(url) {
-            const separator = url.includes("?") ? "&" : "?";
-            return `${url}${separator}v=${encodeURIComponent(APP_VERSION)}`;
-        }
-        let addWizardData = {};
+    <!-- schedule + stock badge -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-2xl" style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            ${esc(med.schedule||'не указано')}
+        </div>
+        <div ${stockBadge}>Запас: ${remTxt} ${unitName}</div>
+    </div>
 
-        const FORM_LABELS = {
-            tablets: ["таблетке", "таблеток"],
-            capsules: ["капсуле", "капсул"],
-            liquid: ["бутылке", "бутылок"],
-            drops: ["флаконе", "флаконов"],
-            spray: ["флаконе", "флаконов"],
-            sachet: ["саше", "саше"]
+    <!-- secondary: Пополнить + Дозировка -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+        <button onclick="window.handleRefill(${med.chat_id},'${sn}')"
+            class="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-all"
+            style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)"
+            onmouseover="this.style.color='#10b981';this.style.borderColor='rgba(16,185,129,.25)'"
+            onmouseout="this.style.color='var(--text-secondary)';this.style.borderColor='rgba(255,255,255,.1)'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Пополнить
+        </button>
+        <button onclick="window.handleChangeDose(${med.chat_id},'${sn}')"
+            class="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-all"
+            style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)"
+            onmouseover="this.style.color='#8b5cf6';this.style.borderColor='rgba(139,92,246,.25)'"
+            onmouseout="this.style.color='var(--text-secondary)';this.style.borderColor='rgba(255,255,255,.1)'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 2 2 0 0 1 0-2.36 1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 1.65 1.65 0 0 0-.33 1.82 2 2 0 0 1 0 2.36 1.65 1.65 0 0 0 .33 1.82 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 .33-1.82z"/></svg>
+            Дозировка
+        </button>
+    </div>
+
+    <!-- primary CTA -->
+    ${!isStarted
+        ? `<button onclick="startCourse(${med.chat_id},'${sn}')"
+               class="w-full text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+               style="background:#10b981;box-shadow:0 10px 25px -5px rgba(16,185,129,.35)">
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+               Начать курс
+           </button>`
+        : `<div class="space-y-3">
+               <div class="flex gap-2">
+                   <button onclick="takeMed(${med.chat_id},'${sn}')" ${dl<=0?'disabled':''}
+                       class="flex-1 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                       style="background:#7c3aed;box-shadow:0 20px 40px -12px rgba(124,58,237,.55)">
+                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                       Приняла
+                   </button>
+                   <button onclick="toggleRemind('${rid}')"
+                       class="flex-1 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+                       style="background:#7c3aed;box-shadow:0 20px 40px -12px rgba(124,58,237,.55)">
+                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                       Напомнить позже
+                   </button>
+               </div>
+               <!-- reminder options -->
+               <div id="${rid}" class="remind-panel">
+                   <div class="grid grid-cols-4 gap-2 pt-2">
+                       ${['10 мин','20 мин','30 мин','1 час'].map(l=>`
+                       <button onclick="setRemind('${l}','${rid}')"
+                           class="py-2.5 rounded-xl text-xs font-bold transition-all"
+                           style="background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)"
+                           onmouseover="this.style.background='rgba(139,92,246,.22)'"
+                           onmouseout="this.style.background='rgba(139,92,246,.1)'">${l}</button>`).join('')}
+                   </div>
+               </div>
+           </div>`
+    }
+
+</div>`;
+    } // end for
+
+    container.innerHTML = html;
+
+    // ── animate bars: start at 0%, then transition to real value after 1 paint ──
+    setTimeout(() => {
+        container.querySelectorAll('.progress-bar[data-progress]').forEach(bar => {
+            bar.style.width = bar.dataset.progress + '%';
+        });
+    }, 60);
+}
+
+// ── schedule screen ──
+function renderScheduleScreen(){
+    const c=document.getElementById('scheduleList');
+    if(!c) return;
+    if(!medsData.length){ c.innerHTML='<p class="text-center py-10" style="color:var(--text-secondary)">Нет лекарств в базе</p>'; return; }
+    c.innerHTML=medsData.map(med=>`
+        <div class="glass rounded-[2rem] p-5">
+            <div class="flex items-center gap-4 mb-3">
+                <div class="w-12 h-12 rounded-[1.2rem] flex items-center justify-center text-2xl ${formCls(med.form)}">${icon(med.form)}</div>
+                <div>
+                    <div class="font-bold uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</div>
+                    <div class="text-xs font-medium" style="color:var(--text-secondary)">${med.dose_line||''}</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-sm px-4 py-2 rounded-xl" style="background:var(--surface-hover);color:var(--text-secondary)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                ${esc(med.schedule||'не указано')}
+            </div>
+        </div>`).join('');
+}
+
+// ── reminders screen ──
+function renderRemindersScreen(){
+    const c=document.getElementById('remindersList');
+    if(!c) return;
+    const started=medsData.filter(m=>m.is_started);
+    if(!started.length){ c.innerHTML='<p class="text-center py-10" style="color:var(--text-secondary)">Нет активных курсов.</p>'; return; }
+    c.innerHTML=started.map(med=>{
+        const d=med.days_left;
+        const urg=d<=3?'bg-rose-500/10 text-rose-400':d<=7?'bg-amber-500/10 text-amber-400':'bg-emerald-500/10 text-emerald-400';
+        const sn=esc(med.name).replace(/'/g,"\\'");
+        return `<div class="glass rounded-[2rem] p-5">
+            <div class="flex items-center gap-4 mb-3">
+                <div class="w-12 h-12 rounded-[1.2rem] flex items-center justify-center text-2xl ${formCls(med.form)}">${icon(med.form)}</div>
+                <div class="flex-1">
+                    <div class="font-bold uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</div>
+                    <div class="text-xs font-medium" style="color:var(--text-secondary)">${med.dose_line||''}</div>
+                </div>
+                <div class="px-3 py-1 rounded-full text-xs font-bold ${urg}">${d} дн.</div>
+            </div>
+            <div class="flex items-center gap-2 text-sm px-4 py-2 rounded-xl mb-3" style="background:var(--surface-hover);color:var(--text-secondary)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                ${esc(med.schedule||'расписание не задано')}
+            </div>
+            <button onclick="takeMed(${med.chat_id},'${sn}');renderRemindersScreen();"
+                class="w-full text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all text-sm"
+                style="background:#7c3aed;box-shadow:0 10px 25px -5px rgba(124,58,237,.3)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Отметить приём
+            </button>
+        </div>`;
+    }).join('');
+}
+
+// ── nav ──
+function showScreen(id){
+    ['screenMain','screenSchedule','screenReminders'].forEach(s=>{
+        const el=document.getElementById(s);
+        if(el) el.style.display='none';
+    });
+    document.getElementById(id).style.display='block';
+    const map={screenMain:'bottomCalendar',screenSchedule:'bottomSchedule',screenReminders:'bottomReminder'};
+    Object.entries(map).forEach(([s,b])=>{
+        const btn=document.getElementById(b);
+        if(btn) btn.style.color=s===id?'#a78bfa':'var(--text-secondary)';
+    });
+    if(id==='screenSchedule') renderScheduleScreen();
+    if(id==='screenReminders') renderRemindersScreen();
+}
+
+// ── theme ──
+function initTheme(){
+    const saved=localStorage.getItem('theme');
+    const dark=saved==='dark'||(saved===null&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark',dark);
+    setThemeIcon(dark);
+}
+function setThemeIcon(dark){
+    const ic=document.getElementById('themeIcon');
+    if(!ic) return;
+    ic.innerHTML=dark
+        ?'<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>'
+        :'<path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>';
+}
+function toggleTheme(){
+    const dark=document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme',dark?'dark':'light');
+    setThemeIcon(dark);
+}
+
+// ── wizard ──
+function showAddWizard(){
+    addWizardStep=0; addWizardData={};
+    document.getElementById('addModal').classList.add('active');
+    renderWizardStep();
+}
+function renderWizardStep(){
+    const wc=document.getElementById('wizardContent');
+    if(!wc) return;
+    const btnStyle=`background:var(--btn-secondary);color:var(--text-primary)`;
+    const inp=`w-full p-3 rounded-xl mb-4 border-0 outline-none text-sm font-medium`;
+
+    if(addWizardStep===0){
+        wc.innerHTML=`
+            <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Новое лекарство</h3>
+            <input id="wName" type="text" placeholder="Название лекарства" class="${inp}" style="background:var(--surface-hover);color:var(--text-primary)">
+            <div class="flex gap-3">
+                <button id="wNext" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition-colors">Далее</button>
+                <button id="wCancel" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold transition-colors">Отмена</button>
+            </div>`;
+        document.getElementById('wNext').onclick=()=>{
+            const n=document.getElementById('wName').value.trim();
+            if(!n){showToast('❌ Введите название',true);return;}
+            addWizardData.name=n; addWizardStep=1; renderWizardStep();
         };
-
-        // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-        function showToast(message, isError = false) {
-            const existingToast = document.querySelector('.toast-notification');
-            if (existingToast) existingToast.remove();
-            
-            const toast = document.createElement('div');
-            toast.className = `toast-notification fixed bottom-28 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-white font-bold z-50 ${isError ? 'bg-rose-600' : 'bg-emerald-600'} shadow-2xl`;
-            toast.style.whiteSpace = 'nowrap';
-            toast.innerText = message;
-            document.body.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translate(-50%, 20px)';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
-        }
-
-        // ========== API ВЫЗОВЫ ==========
-        async function fetchMeds() {
-            try {
-                const res = await fetch(`${BASE_URL}/api/meds`);
-                if (!res.ok) throw new Error('Network error');
-                medsData = await res.json();
-                updateStats();
-                renderMeds();
-            } catch (err) {
-                console.error(err);
-                const container = document.getElementById('medsList');
-                if (container) {
-                    container.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Ошибка загрузки данных</div>';
-                }
-            }
-        }
-
-        async function takeMed(chatId, medName) {
-            try {
-                const res = await fetch(`${BASE_URL}/api/taken`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, med_name: medName })
-                });
-                if (res.ok) {
-                    showToast('✅ Приём отмечен!');
-                    await fetchMeds();
-                }
-            } catch (err) { 
-                console.error(err);
-                showToast('❌ Ошибка', true);
-            }
-        }
-
-        async function startCourse(chatId, medName) {
-            try {
-                const res = await fetch(`${BASE_URL}/api/meds/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, med_name: medName })
-                });
-                if (res.ok) {
-                    showToast(`✅ Курс "${medName}" начат!`);
-                    await fetchMeds();
-                }
-            } catch (err) { 
-                console.error(err);
-                showToast('❌ Ошибка', true);
-            }
-        }
-
-        async function deleteMed(chatId, medName) {
-            if (!confirm(`Удалить "${medName}"?`)) return;
-            try {
-                const res = await fetch(`${BASE_URL}/api/meds?chat_id=${chatId}&med_name=${encodeURIComponent(medName)}`, {
-                    method: 'DELETE'
-                });
-                if (res.ok) {
-                    showToast('🗑 Лекарство удалено');
-                    await fetchMeds();
-                }
-            } catch (err) { 
-                console.error(err);
-                showToast('❌ Ошибка', true);
-            }
-        }
-
-        async function updateMed(chatId, medName, field, value) {
-            const body = field === 'dose' ? { daily_mg: value } : { add_stock: value };
-            try {
-                const res = await fetch(`${BASE_URL}/api/meds/update`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, med_name: medName, ...body })
-                });
-                if (res.ok) {
-                    const result = await res.json();
-                    showToast(result.message);
-                    await fetchMeds();
-                }
-            } catch (err) { 
-                console.error(err);
-                showToast('❌ Ошибка', true);
-            }
-        }
-
-        // Глобальные функции для кнопок в карточках
-        window.handleRefill = function(chatId, medName) {
-            let amount = prompt('Введите количество для пополнения (в единицах лекарства):');
-            if (amount && !isNaN(parseFloat(amount))) {
-                updateMed(chatId, medName, 'refill', parseFloat(amount));
-            }
+        document.getElementById('wCancel').onclick=()=>document.getElementById('addModal').classList.remove('active');
+    }
+    else if(addWizardStep===1){
+        wc.innerHTML=`
+            <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Выберите форму</h3>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                ${[['tablets','💊 Таблетки'],['capsules','💊 Капсулы'],['drops','👁 Капли'],['spray','💨 Спрей'],['sachet','📦 Саше'],['liquid','🧴 Жидкость']].map(([f,l])=>`
+                <button data-form="${f}" class="wForm p-3 rounded-xl font-medium hover:bg-violet-500/20 transition-colors" style="${btnStyle}">${l}</button>`).join('')}
+            </div>
+            <button id="wBack" class="w-full p-3 rounded-xl font-bold" style="${btnStyle}">Назад</button>`;
+        wc.querySelectorAll('.wForm').forEach(b=>{ b.onclick=()=>{ addWizardData.form=b.dataset.form; addWizardStep=2; renderWizardStep(); }; });
+        document.getElementById('wBack').onclick=()=>{addWizardStep=0;renderWizardStep();};
+    }
+    else if(addWizardStep===2){
+        const f=addWizardData.form, lab=FORM_LABELS[f]||["единице","единиц"];
+        const q=f==="drops"?"Объем флакона (мл)?":f==="spray"?"Сколько мл в одном флаконе?":f==="liquid"?"Сколько мл в одной единице?":`Сколько мг в одной ${lab[0]}?`;
+        wc.innerHTML=`
+            <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">${q}</h3>
+            <input id="wUnitMg" type="number" step="any" class="${inp}" style="background:var(--surface-hover);color:var(--text-primary)">
+            <div class="flex gap-3">
+                <button id="wNext" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button id="wBack" class="flex-1 py-3 rounded-xl font-bold" style="${btnStyle}">Назад</button>
+            </div>`;
+        document.getElementById('wNext').onclick=()=>{
+            const v=parseFloat(document.getElementById('wUnitMg').value);
+            if(isNaN(v)||v<=0){showToast('❌ Введите корректное значение',true);return;}
+            addWizardData.unit_mg=v; addWizardStep=3; renderWizardStep();
         };
-        
-        window.handleChangeDose = function(chatId, medName) {
-            let dose = prompt('Введите новую суточную дозировку:');
-            if (dose && !isNaN(parseFloat(dose))) {
-                updateMed(chatId, medName, 'dose', parseFloat(dose));
-            }
+        document.getElementById('wBack').onclick=()=>{addWizardStep=1;renderWizardStep();};
+    }
+    else if(addWizardStep===3){
+        const pl=FORM_LABELS[addWizardData.form]?.[1]||"единиц";
+        wc.innerHTML=`
+            <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Сколько ${pl} купили?</h3>
+            <input id="wUnits" type="number" step="any" class="${inp}" style="background:var(--surface-hover);color:var(--text-primary)">
+            <div class="flex gap-3">
+                <button id="wNext" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button id="wBack" class="flex-1 py-3 rounded-xl font-bold" style="${btnStyle}">Назад</button>
+            </div>`;
+        document.getElementById('wNext').onclick=()=>{
+            const v=parseFloat(document.getElementById('wUnits').value);
+            if(isNaN(v)||v<=0){showToast('❌ Введите корректное количество',true);return;}
+            addWizardData.units=v; addWizardStep=4; renderWizardStep();
         };
-        
-        window.deleteMed = deleteMed;
-        window.startCourse = startCourse;
-        window.takeMed = takeMed;
+        document.getElementById('wBack').onclick=()=>{addWizardStep=2;renderWizardStep();};
+    }
+    else if(addWizardStep===4){
+        const du=addWizardData.form==="drops"?"капель":addWizardData.form==="spray"?"впрыскиваний":addWizardData.form==="liquid"?"мл":"мг";
+        wc.innerHTML=`
+            <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Сколько ${du} в сутки принимаете?</h3>
+            <input id="wDaily" type="number" step="any" class="${inp}" style="background:var(--surface-hover);color:var(--text-primary)">
+            <div class="flex gap-3">
+                <button id="wNext" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold">Далее</button>
+                <button id="wBack" class="flex-1 py-3 rounded-xl font-bold" style="${btnStyle}">Назад</button>
+            </div>`;
+        document.getElementById('wNext').onclick=()=>{
+            const v=parseFloat(document.getElementById('wDaily').value);
+            if(isNaN(v)||v<=0){showToast('❌ Введите корректную дозировку',true);return;}
+            addWizardData.daily_mg=v; addWizardStep=5; renderWizardStep();
+        };
+        document.getElementById('wBack').onclick=()=>{addWizardStep=3;renderWizardStep();};
+    }
+    else if(addWizardStep===5){
+        wc.innerHTML=`
+            <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Срок приёма</h3>
+            <div class="grid gap-3 mb-4">
+                <button id="wDays"   class="p-3 rounded-xl font-medium hover:bg-emerald-500/20 transition-colors" style="${btnStyle}">📆 Количество дней</button>
+                <button id="wMonths" class="p-3 rounded-xl font-medium hover:bg-emerald-500/20 transition-colors" style="${btnStyle}">🗓 Количество месяцев</button>
+                <button id="wForever" class="p-3 rounded-xl font-medium hover:bg-emerald-500/20 transition-colors" style="${btnStyle}">♾ Пожизненно</button>
+            </div>
+            <button id="wBack" class="w-full p-3 rounded-xl font-bold" style="${btnStyle}">Назад</button>`;
+        document.getElementById('wDays').onclick=()=>showCourseInput('days');
+        document.getElementById('wMonths').onclick=()=>showCourseInput('months');
+        document.getElementById('wForever').onclick=()=>{ addWizardData.course_days=0; finishWizard(); };
+        document.getElementById('wBack').onclick=()=>{addWizardStep=4;renderWizardStep();};
 
-        // ========== ОТОБРАЖЕНИЕ ==========
-        function updateStats() {
-            const active = medsData.filter(m => m.is_started).length;
-            const expiring = medsData.filter(m => m.days_left <= 7 && m.days_left > 0).length;
-            const activeCount = document.getElementById('activeCount');
-            const expiringCount = document.getElementById('expiringCount');
-            if (activeCount) activeCount.innerText = active;
-            if (expiringCount) expiringCount.innerText = expiring;
-        }
-
-        function getFormIcon(form) {
-            const icons = { tablets: '💊', capsules: '💊', drops: '💧', spray: '💨', liquid: '🧴', sachet: '📦' };
-            return icons[form] || '💊';
-        }
-
-        function getFormColor(form) {
-            const colors = {
-                tablets: 'bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400',
-                capsules: 'bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400',
-                drops: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
-                spray: 'bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
-                liquid: 'bg-sky-100 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400',
-                sachet: 'bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'
+        function showCourseInput(type){
+            const unit=type==='months'?'месяцев':'дней';
+            wc.innerHTML=`
+                <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Введите количество ${unit}</h3>
+                <input id="wCourse" type="number" class="${inp}" style="background:var(--surface-hover);color:var(--text-primary)">
+                <div class="flex gap-3">
+                    <button id="wConfirm" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold">Сохранить</button>
+                    <button id="wBack2" class="flex-1 py-3 rounded-xl font-bold" style="${btnStyle}">Назад</button>
+                </div>`;
+            document.getElementById('wConfirm').onclick=()=>{
+                let v=parseInt(document.getElementById('wCourse').value);
+                if(isNaN(v)||v<=0){showToast('❌ Введите корректное количество',true);return;}
+                if(type==='months') v*=30;
+                addWizardData.course_days=v; finishWizard();
             };
-            return colors[form] || 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400';
+            document.getElementById('wBack2').onclick=()=>{addWizardStep=5;renderWizardStep();};
         }
+    }
+}
 
-        function renderMeds() {
-            const container = document.getElementById('medsList');
-            if (!container) return;
-            
-            if (!medsData.length) {
-                container.innerHTML = `<div class="text-center py-20"><div class="bg-[var(--surface-hover)] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--text-secondary)]/50"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></div><p class="text-[var(--text-secondary)] font-medium">Лекарства не найдены.<br/>Нажмите «Добавить»</p></div>`;
-                return;
-            }
-
-            let html = '';
-            for (let med of medsData) {
-                const progress = med.progress || 0;
-                const progressColor = progress >= 80 ? 'from-red-500 via-rose-500 to-rose-600' : (progress >= 50 ? 'from-yellow-400 via-amber-500 to-orange-500' : 'from-green-300 via-green-500 to-emerald-500');
-                const icon = getFormIcon(med.form);
-                const formColor = getFormColor(med.form);
-                const isStarted = med.is_started;
-                const daysLeft = med.days_left;
-                const remainingUnits = Number.isFinite(Number(med.remaining_units)) ? Number(med.remaining_units) : 0;
-                const dailyUnits = Number.isFinite(Number(med.daily_units)) ? Number(med.daily_units) : 0;
-                const unitName = med.unit_name || 'ед.';
-                const remainingUnitsText = Number.isInteger(remainingUnits) ? remainingUnits.toString() : remainingUnits.toFixed(2).replace(/\.00$/, '');
-                const dailyUnitsText = Number.isInteger(dailyUnits) ? dailyUnits.toString() : dailyUnits.toFixed(2).replace(/\.00$/, '');
-                const courseIndicator = med.course_days === 0
-                    ? `● ЗАПАС: ${remainingUnitsText} ${unitName}`
-                    : (med.is_enough
-                        ? '● НА КУРС ХВАТИТ'
-                        : '● НА КУРС НЕ ХВАТИТ');
-                const courseIndicatorClass = med.course_days === 0 || med.is_enough
-                    ? 'text-emerald-500'
-                    : 'text-rose-500';
-
-                html += `<div class="glass rounded-[2.5rem] p-6 relative overflow-hidden group hover:border-white/10 transition-colors">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-4">
-                            <div class="w-14 h-14 rounded-[1.5rem] flex items-center justify-center relative shadow-lg ${formColor}">
-                                <div class="relative z-10 text-2xl">${icon}</div>
-                            </div>
-                            <div>
-                                <h3 class="font-bold text-lg text-[var(--text-primary)] uppercase tracking-tight">${escapeHtml(med.name)}</h3>
-                                <div class="flex items-center gap-2">
-                                    <p class="text-[var(--text-secondary)] text-sm font-medium">${dailyUnitsText} ${unitName}/сутки</p>
-                                    <div class="w-1 h-1 rounded-full bg-[var(--text-secondary)]/30"></div>
-                                    <p class="text-[var(--text-secondary)] text-[11px] font-bold uppercase tracking-wider">${med.course_days === 0 ? 'Пожизненно' : `Курс: ${med.course_days} дн.`}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex flex-col items-end gap-2">
-                            <button onclick="deleteMed(${med.chat_id}, '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="p-2 text-rose-500/60 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 4V3c0-1 1-2 2-2h4c1 0 2 1 2 2v1"/></svg>
-                            </button>
-                            <div class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${daysLeft <= 7 ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">${daysLeft} дн. ост.</div>
-                            ${isStarted ? '<div class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-tighter flex items-center gap-1"><div class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>КУРС НАЧАТ</div>' : ''}
-                        </div>
-                    </div>
-                    <div class="mb-6">
-                        <div class="flex justify-between text-[11px] font-extrabold text-[var(--text-secondary)] uppercase tracking-widest mb-3">
-                            <span class="flex items-center gap-1.5 opacity-90"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>ЗАПАС</span>
-                            <span class="text-sm ${progress >= 80 ? 'text-rose-500 font-black' : (progress >= 50 ? 'text-amber-500 font-black' : 'text-emerald-500 font-black')}">${progress}%</span>
-                        </div>
-                        <div class="h-6 w-full bg-slate-400/15 dark:bg-black/60 rounded-full overflow-hidden relative p-1 border border-black/[0.03] dark:border-white/5 shadow-inner">
-                            <div class="progress-bar h-full rounded-full bg-gradient-to-r ${progressColor} relative flex items-center justify-end pr-0.5" style="width: ${progress}%">
-                                <div class="absolute inset-x-0 top-0 h-1/2 bg-white/20 rounded-t-full pointer-events-none"></div>
-                                <div class="w-3 h-3 rounded-full bg-white/30 backdrop-blur-md border border-white/40 shadow-sm flex items-center justify-center shrink-0"><div class="w-1 h-1 rounded-full bg-white/90 shadow-sm"></div></div>
-                            </div>
-                        </div>
-                        <div class="mt-2 text-[11px] font-extrabold uppercase tracking-tight ${courseIndicatorClass}">${courseIndicator}</div>
-                    </div>
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-2 text-[var(--text-secondary)] text-xs font-bold btn-secondary px-4 py-2 rounded-2xl border border-white/10">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-violet-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            ${med.schedule || 'не указано'}
-                        </div>
-                        <div class="flex flex-col items-end gap-1">
-                            <div class="text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl ${daysLeft <= 3 ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'text-[var(--text-secondary)] bg-[var(--surface-hover)]'}">Запас: ${remainingUnitsText} ${unitName}</div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <button onclick="window.handleRefill(${med.chat_id}, '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-emerald-500 hover:border-emerald-500/20 transition-all">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Пополнить
-                        </button>
-                        <button onclick="window.handleChangeDose(${med.chat_id}, '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="flex items-center justify-center gap-2 py-3 rounded-2xl btn-secondary border border-white/10 text-[var(--text-secondary)] text-sm font-bold hover:text-violet-500 hover:border-violet-500/20 transition-all">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 2 2 0 0 1 0-2.36 1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82-.33 2 2 0 0 1-2.36 0 1.65 1.65 0 0 0-1.82.33 1.65 1.65 0 0 0-.33 1.82 2 2 0 0 1 0 2.36 1.65 1.65 0 0 0 .33 1.82 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 2 2 0 0 1 2.36 0 1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 .33-1.82z"/></svg>Дозировка
-                        </button>
-                    </div>
-                    ${!isStarted ? `<button onclick="startCourse(${med.chat_id}, '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="w-full bg-emerald-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:bg-emerald-600 active:scale-95 transition-all shadow-lg shadow-emerald-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Начать курс</button>` : `
-                    <button onclick="takeMed(${med.chat_id}, '${escapeHtml(med.name).replace(/'/g, "\\'")}')" class="w-full bg-violet-600 dark:bg-violet-500 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-xl"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Выпил</button>`}
-                </div>`;
-            }
-            container.innerHTML = html;
+async function finishWizard(){
+    try{
+        const payload={
+            name:addWizardData.name, form:addWizardData.form,
+            unit_mg:addWizardData.unit_mg, units:addWizardData.units,
+            daily_mg:addWizardData.daily_mg, course_days:addWizardData.course_days||0,
+            chat_id:Number(medsData?.[0]?.chat_id??0)
+        };
+        const r=await fetch('/api/meds/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        if(r.ok){
+            showToast('✅ Лекарство успешно добавлено!');
+            document.getElementById('addModal').classList.remove('active');
+            await fetchMeds();
+        } else {
+            let d='неизвестная';
+            try{const e=await r.json();d=e.detail||d;}catch{d=await r.text()||d;}
+            showToast('❌ Ошибка: '+d,true);
         }
+    }catch(e){ console.error(e); showToast(`❌ Ошибка соединения (v${APP_VERSION})`,true); }
+}
 
-        // ========== МАСТЕР ДОБАВЛЕНИЯ ==========
-        function showAddWizard() {
-            addWizardStep = 0;
-            addWizardData = {};
-            const modal = document.getElementById('addModal');
-            if (modal) modal.classList.add('active');
-            renderWizardStep();
-        }
+// ── version ──
+async function syncVersion(){
+    try{
+        const r=await fetch(withVersion(`${BASE_URL}/api/version`),{cache:'no-store'});
+        if(!r.ok) return;
+        const d=await r.json();
+        if(d?.version){ APP_VERSION=String(d.version); const el=document.getElementById('appVersionLabel'); if(el) el.textContent=APP_VERSION; }
+    }catch(e){ console.warn(e); }
+}
 
-        function renderWizardStep() {
-            const wizardContent = document.getElementById('wizardContent');
-            if (!wizardContent) return;
+// ── init ──
+document.getElementById('themeToggle').addEventListener('click',toggleTheme);
+document.getElementById('refreshBtn').addEventListener('click',()=>{ showSkeleton(); fetchMeds(); });
+document.getElementById('addMedBtn').addEventListener('click',showAddWizard);
+document.getElementById('bottomCalendar').addEventListener('click',()=>showScreen('screenMain'));
+document.getElementById('bottomSchedule').addEventListener('click',()=>showScreen('screenSchedule'));
+document.getElementById('bottomReminder').addEventListener('click',()=>showScreen('screenReminders'));
+document.getElementById('addModal').addEventListener('click',e=>{ if(e.target===document.getElementById('addModal')) document.getElementById('addModal').classList.remove('active'); });
 
-            if (addWizardStep === 0) {
-                wizardContent.innerHTML = `
-                    <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Новое лекарство</h3>
-                    <input type="text" id="wizardName" placeholder="Название лекарства" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
-                    <div class="flex gap-3">
-                        <button id="wizardNextBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Далее</button>
-                        <button id="wizardCancelBtn" class="flex-1 bg-rose-600 text-white py-3 rounded-xl font-bold">Отмена</button>
-                    </div>
-                `;
-                const nextBtn = document.getElementById('wizardNextBtn');
-                const cancelBtn = document.getElementById('wizardCancelBtn');
-                if (nextBtn) {
-                    nextBtn.onclick = () => {
-                        const name = document.getElementById('wizardName').value.trim();
-                        if (!name) {
-                            showToast('❌ Введите название', true);
-                            return;
-                        }
-                        addWizardData.name = name;
-                        addWizardStep = 1;
-                        renderWizardStep();
-                    };
-                }
-                if (cancelBtn) {
-                    cancelBtn.onclick = () => {
-                        document.getElementById('addModal').classList.remove('active');
-                    };
-                }
-            } 
-            else if (addWizardStep === 1) {
-                wizardContent.innerHTML = `
-                    <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Выберите форму</h3>
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <button data-form="tablets" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20">💊 Таблетки</button>
-                        <button data-form="capsules" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20">💊 Капсулы</button>
-                        <button data-form="drops" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20">👁 Капли</button>
-                        <button data-form="spray" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20">💨 Спрей</button>
-                        <button data-form="sachet" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20">📦 Саше</button>
-                        <button data-form="liquid" class="wizard-form-btn p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-violet-500/20">🧴 Жидкость</button>
-                    </div>
-                    <button id="wizardBackBtn" class="w-full p-3 rounded-xl bg-[var(--btn-secondary)] text-[var(--text-primary)] font-bold">Назад</button>
-                `;
-                document.querySelectorAll('.wizard-form-btn').forEach(btn => {
-                    btn.onclick = () => {
-                        addWizardData.form = btn.dataset.form;
-                        addWizardStep = 2;
-                        renderWizardStep();
-                    };
-                });
-                const backBtn = document.getElementById('wizardBackBtn');
-                if (backBtn) {
-                    backBtn.onclick = () => {
-                        addWizardStep = 0;
-                        renderWizardStep();
-                    };
-                }
-            }
-            else if (addWizardStep === 2) {
-                const form = addWizardData.form;
-                const label = FORM_LABELS[form] || ["единице", "единиц"];
-                let question = form === "drops" ? "Объем флакона (мл)?" :
-                              form === "spray" ? "Сколько мл в одном флаконе?" :
-                              form === "liquid" ? "Сколько мл в одной единице?" :
-                              `Сколько мг в одной ${label[0]}?`;
-                
-                wizardContent.innerHTML = `
-                    <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">${question}</h3>
-                    <input type="number" step="any" id="wizardUnitMg" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
-                    <div class="flex gap-3">
-                        <button id="wizardNextBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Далее</button>
-                        <button id="wizardBackBtn" class="flex-1 bg-[var(--btn-secondary)] text-[var(--text-primary)] py-3 rounded-xl font-bold">Назад</button>
-                    </div>
-                `;
-                const nextBtn = document.getElementById('wizardNextBtn');
-                const backBtn = document.getElementById('wizardBackBtn');
-                if (nextBtn) {
-                    nextBtn.onclick = () => {
-                        const val = parseFloat(document.getElementById('wizardUnitMg').value);
-                        if (isNaN(val) || val <= 0) {
-                            showToast('❌ Введите корректное значение', true);
-                            return;
-                        }
-                        addWizardData.unit_mg = val;
-                        addWizardStep = 3;
-                        renderWizardStep();
-                    };
-                }
-                if (backBtn) {
-                    backBtn.onclick = () => {
-                        addWizardStep = 1;
-                        renderWizardStep();
-                    };
-                }
-            }
-            else if (addWizardStep === 3) {
-                const plural = FORM_LABELS[addWizardData.form]?.[1] || "единиц";
-                wizardContent.innerHTML = `
-                    <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Сколько ${plural} купили?</h3>
-                    <input type="number" step="any" id="wizardUnits" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
-                    <div class="flex gap-3">
-                        <button id="wizardNextBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Далее</button>
-                        <button id="wizardBackBtn" class="flex-1 bg-[var(--btn-secondary)] text-[var(--text-primary)] py-3 rounded-xl font-bold">Назад</button>
-                    </div>
-                `;
-                const nextBtn = document.getElementById('wizardNextBtn');
-                const backBtn = document.getElementById('wizardBackBtn');
-                if (nextBtn) {
-                    nextBtn.onclick = () => {
-                        const val = parseFloat(document.getElementById('wizardUnits').value);
-                        if (isNaN(val) || val <= 0) {
-                            showToast('❌ Введите корректное количество', true);
-                            return;
-                        }
-                        addWizardData.units = val;
-                        addWizardStep = 4;
-                        renderWizardStep();
-                    };
-                }
-                if (backBtn) {
-                    backBtn.onclick = () => {
-                        addWizardStep = 2;
-                        renderWizardStep();
-                    };
-                }
-            }
-            else if (addWizardStep === 4) {
-                let doseUnit = addWizardData.form === "drops" ? "капель" :
-                              addWizardData.form === "spray" ? "впрыскиваний" :
-                              addWizardData.form === "liquid" ? "мл" : "мг";
-                
-                wizardContent.innerHTML = `
-                    <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Сколько ${doseUnit} в сутки принимаете?</h3>
-                    <input type="number" step="any" id="wizardDailyMg" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
-                    <div class="flex gap-3">
-                        <button id="wizardNextBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Далее</button>
-                        <button id="wizardBackBtn" class="flex-1 bg-[var(--btn-secondary)] text-[var(--text-primary)] py-3 rounded-xl font-bold">Назад</button>
-                    </div>
-                `;
-                const nextBtn = document.getElementById('wizardNextBtn');
-                const backBtn = document.getElementById('wizardBackBtn');
-                if (nextBtn) {
-                    nextBtn.onclick = () => {
-                        const val = parseFloat(document.getElementById('wizardDailyMg').value);
-                        if (isNaN(val) || val <= 0) {
-                            showToast('❌ Введите корректную дозировку', true);
-                            return;
-                        }
-                        addWizardData.daily_mg = val;
-                        addWizardStep = 5;
-                        renderWizardStep();
-                    };
-                }
-                if (backBtn) {
-                    backBtn.onclick = () => {
-                        addWizardStep = 3;
-                        renderWizardStep();
-                    };
-                }
-            }
-            else if (addWizardStep === 5) {
-                wizardContent.innerHTML = `
-                    <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Срок приёма</h3>
-                    <div class="grid grid-cols-1 gap-3 mb-4">
-                        <button id="courseDaysBtn" class="p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-emerald-500/20">📆 Количество дней</button>
-                        <button id="courseMonthsBtn" class="p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-emerald-500/20">🗓 Количество месяцев</button>
-                        <button id="courseForeverBtn" class="p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] font-medium hover:bg-emerald-500/20">♾ Пожизненно</button>
-                    </div>
-                    <button id="wizardBackBtn" class="w-full p-3 rounded-xl bg-[var(--btn-secondary)] text-[var(--text-primary)] font-bold">Назад</button>
-                `;
-                
-                const daysBtn = document.getElementById('courseDaysBtn');
-                const monthsBtn = document.getElementById('courseMonthsBtn');
-                const foreverBtn = document.getElementById('courseForeverBtn');
-                const backBtn = document.getElementById('wizardBackBtn');
-                
-                if (daysBtn) {
-                    daysBtn.onclick = () => showCourseInput('days');
-                }
-                if (monthsBtn) {
-                    monthsBtn.onclick = () => showCourseInput('months');
-                }
-                if (foreverBtn) {
-                    foreverBtn.onclick = () => {
-                        addWizardData.course_days = 0;
-                        finishAddWizard();
-                    };
-                }
-                if (backBtn) {
-                    backBtn.onclick = () => {
-                        addWizardStep = 4;
-                        renderWizardStep();
-                    };
-                }
-                
-                function showCourseInput(type) {
-                    const unit = type === 'months' ? 'месяцев' : 'дней';
-                    wizardContent.innerHTML = `
-                        <h3 class="text-xl font-bold mb-4 text-[var(--text-primary)]">Введите количество ${unit}</h3>
-                        <input type="number" id="wizardCourseValue" class="w-full p-3 rounded-xl bg-[var(--surface-hover)] text-[var(--text-primary)] mb-4 border border-white/10">
-                        <div class="flex gap-3">
-                            <button id="courseConfirmBtn" class="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold">Сохранить</button>
-                            <button id="courseBackBtn" class="flex-1 bg-[var(--btn-secondary)] text-[var(--text-primary)] py-3 rounded-xl font-bold">Назад</button>
-                        </div>
-                    `;
-                    const confirmBtn = document.getElementById('courseConfirmBtn');
-                    const backBtn2 = document.getElementById('courseBackBtn');
-                    if (confirmBtn) {
-                        confirmBtn.onclick = () => {
-                            let val = parseInt(document.getElementById('wizardCourseValue').value);
-                            if (isNaN(val) || val <= 0) {
-                                showToast('❌ Введите корректное количество', true);
-                                return;
-                            }
-                            if (type === 'months') val *= 30;
-                            addWizardData.course_days = val;
-                            finishAddWizard();
-                        };
-                    }
-                    if (backBtn2) {
-                        backBtn2.onclick = () => {
-                            addWizardStep = 5;
-                            renderWizardStep();
-                        };
-                    }
-                }
-            }
-        }
-
-        async function finishAddWizard() {
-            try {
-                const payload = {
-                    name: addWizardData.name,
-                    form: addWizardData.form,
-                    unit_mg: addWizardData.unit_mg,
-                    units: addWizardData.units,
-                    daily_mg: addWizardData.daily_mg,
-                    course_days: addWizardData.course_days || 0,
-                    chat_id: Number(medsData?.[0]?.chat_id ?? 0)
-                };
-
-                let res = await fetch('/api/meds/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
-                if (res.ok) {
-                    showToast('✅ Лекарство успешно добавлено!');
-                    const modal = document.getElementById('addModal');
-                    if (modal) modal.classList.remove('active');
-                    await fetchMeds();
-                } else {
-                    let detail = 'неизвестная';
-                    try {
-                        const err = await res.json();
-                        detail = err.detail || detail;
-                    } catch (_) {
-                        detail = await res.text() || detail;
-                    }
-                    showToast('❌ Ошибка: ' + detail, true);
-                }
-            } catch (err) {
-                console.error(err);
-                showToast(`❌ Ошибка соединения с сервером (v${APP_VERSION})`, true);
-            }
-        }
-
-        // ========== ИНИЦИАЛИЗАЦИЯ ==========
-        function initTheme() {
-            const saved = localStorage.getItem('theme');
-            const isDark = saved === 'dark' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
-            if (isDark) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
-        }
-        
-        function toggleTheme() {
-            document.documentElement.classList.toggle('dark');
-            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-        }
-
-        // Назначение обработчиков событий
-        const themeToggleBtn = document.getElementById('themeToggle');
-        if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
-        
-        const refreshBtnElem = document.getElementById('refreshBtn');
-        if (refreshBtnElem) refreshBtnElem.addEventListener('click', fetchMeds);
-        
-        const addMedBtnElem = document.getElementById('addMedBtn');
-        if (addMedBtnElem) addMedBtnElem.addEventListener('click', showAddWizard);
-        
-        // ========== НАВИГАЦИЯ МЕЖДУ ЭКРАНАМИ ==========
-        const SCREENS = ['screenMain', 'screenSchedule', 'screenReminders'];
-        
-        function showScreen(id) {
-            SCREENS.forEach(s => {
-                const el = document.getElementById(s);
-                if (el) el.style.display = 'none';
-            });
-            const target = document.getElementById(id);
-            if (target) target.style.display = 'block';
-
-            // Обновить активную иконку
-            document.getElementById('bottomCalendar').classList.toggle('text-violet-400', id === 'screenMain');
-            document.getElementById('bottomCalendar').classList.toggle('text-[var(--text-secondary)]', id !== 'screenMain');
-            document.getElementById('bottomSchedule').classList.toggle('text-violet-400', id === 'screenSchedule');
-            document.getElementById('bottomSchedule').classList.toggle('text-[var(--text-secondary)]', id !== 'screenSchedule');
-            document.getElementById('bottomReminder').classList.toggle('text-violet-400', id === 'screenReminders');
-            document.getElementById('bottomReminder').classList.toggle('text-[var(--text-secondary)]', id !== 'screenReminders');
-
-            if (id === 'screenSchedule') renderScheduleScreen();
-            if (id === 'screenReminders') renderRemindersScreen();
-        }
-
-        function renderScheduleScreen() {
-            const container = document.getElementById('scheduleList');
-            if (!container) return;
-            if (!medsData.length) {
-                container.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Нет лекарств в базе</div>';
-                return;
-            }
-            let html = '';
-            for (const med of medsData) {
-                const icon = getFormIcon(med.form);
-                const formColor = getFormColor(med.form);
-                const schedule = med.schedule || 'не указано';
-                html += `<div class="glass rounded-[2rem] p-5">
-                    <div class="flex items-center gap-4 mb-3">
-                        <div class="w-12 h-12 rounded-[1.2rem] flex items-center justify-center text-xl ${formColor}">${icon}</div>
-                        <div>
-                            <div class="font-bold text-[var(--text-primary)] uppercase tracking-tight">${escapeHtml(med.name)}</div>
-                            <div class="text-xs text-[var(--text-secondary)] font-medium">${med.dose_line || ''}</div>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--surface-hover)] px-4 py-2 rounded-xl">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-violet-400 shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <span>${escapeHtml(schedule)}</span>
-                    </div>
-                </div>`;
-            }
-            container.innerHTML = html;
-        }
-
-        function renderRemindersScreen() {
-            const container = document.getElementById('remindersList');
-            if (!container) return;
-            if (!medsData.length) {
-                container.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Нет лекарств в базе</div>';
-                return;
-            }
-
-            const started = medsData.filter(m => m.is_started);
-            if (!started.length) {
-                container.innerHTML = '<div class="text-center py-10 text-[var(--text-secondary)]">Нет активных курсов. Начните курс, чтобы получать напоминания.</div>';
-                return;
-            }
-
-            let html = '';
-            for (const med of started) {
-                const icon = getFormIcon(med.form);
-                const formColor = getFormColor(med.form);
-                const daysLeft = med.days_left;
-                const urgencyClass = daysLeft <= 3 ? 'bg-rose-500/10 text-rose-400' : daysLeft <= 7 ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400';
-                html += `<div class="glass rounded-[2rem] p-5">
-                    <div class="flex items-center gap-4 mb-3">
-                        <div class="w-12 h-12 rounded-[1.2rem] flex items-center justify-center text-xl ${formColor}">${icon}</div>
-                        <div class="flex-1">
-                            <div class="font-bold text-[var(--text-primary)] uppercase tracking-tight">${escapeHtml(med.name)}</div>
-                            <div class="text-xs text-[var(--text-secondary)] font-medium">${med.dose_line || ''}</div>
-                        </div>
-                        <div class="px-3 py-1 rounded-full text-xs font-bold ${urgencyClass}">${daysLeft} дн.</div>
-                    </div>
-                    <div class="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--surface-hover)] px-4 py-2 rounded-xl mb-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-violet-400 shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <span>${escapeHtml(med.schedule || 'расписание не задано')}</span>
-                    </div>
-                    <button onclick="takeMed(${med.chat_id}, '${escapeHtml(med.name).replace(/'/g, "\\'")}'); renderRemindersScreen();" 
-                        class="w-full bg-violet-600 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all text-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                        Отметить приём
-                    </button>
-                </div>`;
-            }
-            container.innerHTML = html;
-        }
-
-        const bottomCalendar = document.getElementById('bottomCalendar');
-        if (bottomCalendar) bottomCalendar.addEventListener('click', () => showScreen('screenMain'));
-        
-        const bottomSchedule = document.getElementById('bottomSchedule');
-        if (bottomSchedule) bottomSchedule.addEventListener('click', () => showScreen('screenSchedule'));
-        
-        const bottomReminder = document.getElementById('bottomReminder');
-        if (bottomReminder) bottomReminder.addEventListener('click', () => showScreen('screenReminders'));
-        
-        const modal = document.getElementById('addModal');
-        if (modal) {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('active');
-                }
-            });
-        }
-        
-        async function syncAppVersion() {
-            try {
-                const res = await fetch(withVersion(`${BASE_URL}/api/version`), { cache: 'no-store' });
-                if (!res.ok) return;
-                const data = await res.json();
-                if (data?.version) {
-                    APP_VERSION = String(data.version);
-                    const versionEl = document.getElementById('appVersionLabel');
-                    if (versionEl) versionEl.textContent = APP_VERSION;
-                }
-            } catch (err) {
-                console.warn('Failed to sync app version', err);
-            }
-        }
-
-        initTheme();
-        syncAppVersion();
-        fetchMeds();
-        setInterval(fetchMeds, 30000);
-    </script>
+initTheme();
+showSkeleton();
+syncVersion();
+fetchMeds();
+setInterval(fetchMeds,30000);
+</script>
 </body>
 </html>
