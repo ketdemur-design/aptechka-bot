@@ -22,7 +22,7 @@ from telegram.ext import (
 # Версия приложения (меняйте в settings.py или через APP_VERSION в окружении)
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 BOT_VERSION = APP_VERSION
-DATA_FILE = Path("meds_data.json")
+DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -32,14 +32,10 @@ data_store = {}
 user_states = {}
 started_users = set()
 pending_delayed_tasks = set()
+reminder_task = None
 _write_lock = asyncio.Lock()
 bot_application = None
 
-
-# Для локальной отладки
-DATA_FILE = Path("meds_data.json")
-
-# Для локальной отладки
 
 print(f"🤖 Бот использует файл данных: {DATA_FILE.absolute()}")
 
@@ -669,15 +665,27 @@ def parse_times(text):
 
 # ================== ЗАПУСК ==================
 async def post_init(application):
-    global bot_application
+    global bot_application, reminder_task
     bot_application = application
     await application.bot.set_my_commands([BotCommand("start", "перезапустить бота")])
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not DATA_FILE.exists():
+        DATA_FILE.write_text("{}", encoding="utf-8")
     load_data_store()
-    asyncio.create_task(reminder_loop())
+    reminder_task = asyncio.create_task(reminder_loop())
     print(f"Бот v{BOT_VERSION} инициализирован. DATA_FILE={DATA_FILE}")
 
+async def post_shutdown(application):
+    global reminder_task
+    if reminder_task and not reminder_task.done():
+        reminder_task.cancel()
+        try:
+            await reminder_task
+        except asyncio.CancelledError:
+            pass
+
 def main():
-    app_bot = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
+    app_bot = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).post_shutdown(post_shutdown).build()
     app_bot.add_handler(CommandHandler("start", start))
     app_bot.add_handler(CallbackQueryHandler(buttons))
     app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
