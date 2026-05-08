@@ -97,11 +97,15 @@ def load_data_store():
         return {}
 
 def save_data_store(data_store):
-    """Сохраняет данные в ТОТ ЖЕ файл, что и бот"""
+    """Сохраняет данные в ТОТ ЖЕ файл, что и бот (атомарная запись)."""
     try:
         serializable = {str(k): v for k, v in data_store.items()}
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(serializable, f, ensure_ascii=False, indent=2)
+        temp_file = DATA_FILE.with_suffix(".tmp")
+        temp_file.write_text(
+            json.dumps(serializable, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temp_file.replace(DATA_FILE)
         logger.info(f"💾 Данные сохранены в {DATA_FILE}")
         return True
     except Exception as e:
@@ -429,7 +433,8 @@ async def mark_taken(req: TakenRequest):
             per_dose = med["daily_mg"] / doses_count if doses_count > 0 else med["daily_mg"]
             med["total_mg"] = max(0, med["total_mg"] - per_dose)
             
-            save_data_store(data_store)
+            async with _write_lock:
+                save_data_store(data_store)
             return {"success": True, "message": "Приём отмечен"}
         
         return {"success": True, "message": "Приём отмечен"}
