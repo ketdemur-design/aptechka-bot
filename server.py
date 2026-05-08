@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 TZ_MOSCOW = pytz.timezone('Europe/Moscow')
 
 # Используем ТОТ ЖЕ файл, что и в app.py
-DATA_FILE = Path("meds_data.json")
+DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
 
 logger.info(f"📁 Server использует файл данных: {DATA_FILE.absolute()}")
 
@@ -42,6 +42,12 @@ app.add_middleware(
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+@app.on_event("startup")
+async def ensure_data_file():
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not DATA_FILE.exists():
+        DATA_FILE.write_text("{}", encoding="utf-8")
 
 # ================== МОДЕЛИ ==================
 class AddMedicineRequest(BaseModel):
@@ -258,6 +264,13 @@ async def get_meds(chat_id: Optional[int] = None):
     
     logger.info(f"Returning {len(result)} medicines")
     return result
+
+@app.get("/service-worker.js")
+async def service_worker():
+    sw_path = STATIC_DIR / "service-worker.js"
+    if sw_path.exists():
+        return FileResponse(sw_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="service-worker.js not found")
 
 @app.post("/api/meds/add")
 async def add_medicine(req: AddMedicineRequest):
