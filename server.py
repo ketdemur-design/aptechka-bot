@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -474,6 +474,30 @@ async def health_check():
 async def test():
     """Тестовый эндпоинт"""
     return {"message": "Server is working!"}
+
+@app.get("/manifest.json")
+async def manifest():
+    """PWA manifest"""
+    manifest_path = STATIC_DIR / "manifest.json"
+    if manifest_path.exists():
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    raise HTTPException(status_code=404, detail="manifest not found")
+
+@app.get("/service-worker.js")
+async def service_worker():
+    """PWA service worker"""
+    sw_path = STATIC_DIR / "service-worker.js"
+    if sw_path.exists():
+        return FileResponse(sw_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="service worker not found")
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Return favicon if available, otherwise no-content to avoid noisy 404 logs."""
+    favicon_path = STATIC_DIR / "favicon.ico"
+    if favicon_path.exists():
+        return FileResponse(favicon_path, media_type="image/x-icon")
+    return Response(status_code=204)
 
 # ================== ГЛАВНАЯ СТРАНИЦА ==================
 @app.get("/")
