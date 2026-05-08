@@ -11,6 +11,7 @@ from typing import Optional
 import uvicorn
 import pytz
 import logging
+import asyncio
 
 from settings import APP_VERSION
 
@@ -27,6 +28,7 @@ DATA_FILE = Path("meds_data.json")
 logger.info(f"📁 Server использует файл данных: {DATA_FILE.absolute()}")
 
 app = FastAPI()
+_write_lock = asyncio.Lock()
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -147,7 +149,11 @@ def format_schedule(times_dict):
 def calculate_progress(med):
     course_days = med.get("course_days")
     if not course_days or course_days <= 0:
-        return 0
+        total_units = calculate_remaining_units({"form": med.get("form"), "total_mg": med.get("initial_total_mg", med.get("total_mg", 0)), "unit_mg": med.get("unit_mg", 0)})
+        current_units = calculate_remaining_units(med)
+        if total_units <= 0:
+            return 0
+        return max(0, min(100, int((current_units / total_units) * 100)))
     if not med.get("is_started") or not med.get("start_date"):
         return 0
     
@@ -175,11 +181,8 @@ def get_unit_name(form):
     return unit_map.get(form, "ед.")
 
 def calculate_remaining_units(med):
-    form = med.get("form", "tablets")
     total_mg = med.get("total_mg", 0) or 0
     unit_mg = med.get("unit_mg", 0) or 0
-    if form in ("drops", "spray"):
-        return total_mg
     if unit_mg <= 0:
         return 0
     return total_mg / unit_mg
@@ -302,7 +305,9 @@ async def add_medicine(req: AddMedicineRequest):
         }
         
         # Сохраняем
-        if save_data_store(data_store):
+        async with _write_lock:
+            ok = save_data_store(data_store)
+        if ok:
             days = calc_days_left(data_store[chat_id][req_name])
             logger.info(f"✅ Added medicine: {req_name}, lasts {days} days")
             return {"success": True, "message": f"✅ Лекарство добавлено! Хватит на {days} дней", "name": req_name}
@@ -332,7 +337,9 @@ async def update_medicine(req: UpdateMedicineRequest):
         
         if req.daily_mg is not None:
             med["daily_mg"] = req.daily_mg
-            if save_data_store(data_store):
+            async with _write_lock:
+                ok = save_data_store(data_store)
+            if ok:
                 days = calc_days_left(med)
                 return {"success": True, "message": f"Дозировка изменена! Хватит на {days} дн."}
         
@@ -348,9 +355,10 @@ async def update_medicine(req: UpdateMedicineRequest):
             med["total_mg"] += added
             med["notified"] = False
             
-            if save_data_store(data_store):
-                days = calc_days_left(med)
-                return {"success": True, "message": f"Пополнено! Хватит на {days} дн."}
+            async with _write_lock:
+                ok = save_data_store(data_store)
+            if ok:
+                return {"success": True, "message": "🔄 Пополнено!"}
         
         raise HTTPException(status_code=500, detail="Ошибка сохранения")
         
@@ -376,7 +384,9 @@ async def start_course(req: StartCourseRequest):
         med["is_started"] = True
         med["start_date"] = get_now().isoformat()
         
-        if save_data_store(data_store):
+        async with _write_lock:
+            ok = save_data_store(data_store)
+        if ok:
             return {"success": True, "message": f"Курс «{req.med_name}» начат!"}
         else:
             raise HTTPException(status_code=500, detail="Ошибка сохранения")
@@ -425,7 +435,9 @@ async def delete_medicine(chat_id: int, med_name: str):
         if chat_id in data_store and med_name in data_store[chat_id]:
             del data_store[chat_id][med_name]
             
-            if save_data_store(data_store):
+            async with _write_lock:
+                ok = save_data_store(data_store)
+            if ok:
                 return {"success": True, "message": "Лекарство удалено"}
         
         raise HTTPException(status_code=404, detail="Лекарство не найдено")
