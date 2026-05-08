@@ -35,11 +35,14 @@ STATIC_DIR = Path(__file__).parent / "static"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not DATA_FILE.exists():
+    if DATA_FILE.exists():
+        content = DATA_FILE.read_text(encoding="utf-8")
+        preview = content[:200].replace("\n", "\\n")
+        logger.info(f"✅ Файл данных найден: {DATA_FILE}")
+        logger.info(f"🔎 Содержимое файла {DATA_FILE}: {preview}")
+    else:
         DATA_FILE.write_text("{}", encoding="utf-8")
         logger.info(f"🆕 Создан файл данных: {DATA_FILE}")
-    else:
-        logger.info(f"✅ Файл данных найден: {DATA_FILE}")
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -89,15 +92,22 @@ def load_data_store():
         logger.warning(f"⚠️ Файл данных не найден: {DATA_FILE}")
         return {}
     try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            content = f.read().strip()
-            if not content:
-                return {}
-            raw = json.loads(content)
-            return {int(k): v for k, v in raw.items()}
-    except json.JSONDecodeError as e:
-        logger.error(f"❌ Ошибка парсинга JSON: {e}")
-        return {}
+        raw_text = DATA_FILE.read_text(encoding="utf-8")
+        if not raw_text.strip():
+            return {}
+
+        raw = json.loads(raw_text)
+        if not isinstance(raw, dict):
+            logger.error(f"❌ Некорректная структура данных: {type(raw).__name__}")
+            return {}
+
+        normalized = {}
+        for key, value in raw.items():
+            try:
+                normalized[int(key)] = value
+            except (TypeError, ValueError):
+                logger.warning(f"⚠️ Пропущен chat_id с некорректным ключом: {key!r}")
+        return normalized
     except Exception as e:
         logger.error(f"❌ Ошибка загрузки данных: {e}")
         return {}
