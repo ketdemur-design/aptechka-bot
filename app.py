@@ -118,14 +118,25 @@ def load_data_store():
         data_store = {}
         return
     try:
-        raw_text = DATA_FILE.read_text(encoding="utf-8").strip()
-        if not raw_text:
+        raw_text = DATA_FILE.read_text(encoding="utf-8")
+        if not raw_text.strip():
             data_store = {}
             return
+
         raw = json.loads(raw_text)
+        if not isinstance(raw, dict):
+            print(f"Ошибка при загрузке данных: некорректная структура {type(raw).__name__}")
+            data_store = {}
+            return
+
         data_store.clear()
         for chat_id, meds in raw.items():
-            data_store[int(chat_id)] = {name: _deserialize_med(med) for name, med in meds.items()}
+            try:
+                chat_id_int = int(chat_id)
+            except (TypeError, ValueError):
+                print(f"Пропущен chat_id с некорректным ключом: {chat_id!r}")
+                continue
+            data_store[chat_id_int] = {name: _deserialize_med(med) for name, med in meds.items()}
         total = sum(len(v) for v in data_store.values())
         print(f"Загружено записей о лекарствах: {total}")
     except Exception as e:
