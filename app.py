@@ -437,7 +437,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_data_store_async()
             days = calc_days_left(med)
             user_states.pop(chat_id, None)
-            await update.message.reply_text(f"🔄 Пополнено! Хватит на {days} дн.", reply_markup=main_menu())
+            await update.message.reply_text(f"🔄 Пополнено!", reply_markup=main_menu())
             return
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -567,7 +567,7 @@ async def save_medicine(update_or_query, chat_id):
     days = calc_days_left(med)
     _, dose_label = get_display_units(med)
 
-    msg = f"✅ Лекарство *{d['name']}* успешно добавлено!\n\nРасход: {daily_mg} {dose_label}/сутки\nХватит на: {days} дней\n\n⚠️ Нажмите «▶️ Начать курс» для старта отсчёта."
+    msg = f"✅ Лекарство успешно добавлено!\n\nРасход: {daily_mg} {dose_label}/сутки\nХватит на: {days} дней\n\n⚠️ Нажмите «▶️ Начать курс» для старта отсчёта."
 
     if hasattr(update_or_query, 'reply_text'):
         await update_or_query.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
@@ -576,7 +576,7 @@ async def save_medicine(update_or_query, chat_id):
         await update_or_query.message.reply_text("Главное меню:", reply_markup=main_menu())
 
     user_states.pop(chat_id, None)
-
+    
 async def show_summary(update_or_query, context: ContextTypes.DEFAULT_TYPE = None):
     if hasattr(update_or_query, "message"):
         message = update_or_query.message
