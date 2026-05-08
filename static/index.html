@@ -619,11 +619,11 @@ function renderRemindersScreen(){
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 ${esc(med.schedule||'расписание не задано')}
             </div>
-            <button onclick="takeMed(${med.chat_id},'${sn}');renderRemindersScreen();"
+            <button onclick="takeMed(${med.chat_id},'${sn}');renderReminderScreen();"
                 class="w-full text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all text-sm"
                 style="background:#7c3aed;box-shadow:0 10px 25px -5px rgba(124,58,237,.3)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                Отметить приём
+                Выпил
             </button>
         </div>`;
     }).join('');
@@ -631,18 +631,18 @@ function renderRemindersScreen(){
 
 // ── nav ──
 function showScreen(id){
-    ['screenMain','screenSchedule','screenReminders'].forEach(s=>{
+    ['screenMain','screenForecast','screenReminder'].forEach(s=>{
         const el=document.getElementById(s);
         if(el) el.style.display='none';
     });
     document.getElementById(id).style.display='block';
-    const map={screenMain:'bottomCalendar',screenSchedule:'bottomSchedule',screenReminders:'bottomReminder'};
+    const map={screenMain:'bottomKit',screenForecast:'bottomForecast',screenReminder:'bottomReminder'};
     Object.entries(map).forEach(([s,b])=>{
         const btn=document.getElementById(b);
         if(btn) btn.style.color=s===id?'#a78bfa':'var(--text-secondary)';
     });
-    if(id==='screenSchedule') renderScheduleScreen();
-    if(id==='screenReminders') renderRemindersScreen();
+    if(id==='screenForecast') renderForecastScreen();
+    if(id==='screenReminder') renderReminderScreen();
 }
 
 // ── theme ──
@@ -705,7 +705,7 @@ function renderWizardStep(){
     }
     else if(addWizardStep===2){
         const f=addWizardData.form, lab=FORM_LABELS[f]||["единице","единиц"];
-        const q=f==="drops"?"Объем флакона (мл)?":f==="spray"?"Сколько мл в одном флаконе?":f==="liquid"?"Сколько мл в одной единице?":`Сколько мг в одной ${lab[0]}?`;
+        const q=f==="drops"?"Объем флакона (мл)?":f==="spray"?"Сколько мл в одном флаконе?":f==="liquid"?"Сколько мл в одной единице?":`Сколько штуки в одной ${lab[0]}?`;
         wc.innerHTML=`
             <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">${q}</h3>
             <input id="wUnitMg" type="number" step="any" class="${inp}" style="background:var(--surface-hover);color:var(--text-primary)">
@@ -737,7 +737,7 @@ function renderWizardStep(){
         document.getElementById('wBack').onclick=()=>{addWizardStep=2;renderWizardStep();};
     }
     else if(addWizardStep===4){
-        const du=addWizardData.form==="drops"?"капель":addWizardData.form==="spray"?"впрыскиваний":addWizardData.form==="liquid"?"мл":"мг";
+        const du=addWizardData.form==="drops"?"капель":addWizardData.form==="spray"?"впрыскиваний":addWizardData.form==="liquid"?"мл":"штуки";
         wc.innerHTML=`
             <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Сколько ${du} в сутки принимаете?</h3>
             <input id="wDaily" type="number" step="any" class="${inp}" style="background:var(--surface-hover);color:var(--text-primary)">
@@ -763,39 +763,7 @@ function renderWizardStep(){
             <button id="wBack" class="w-full p-3 rounded-xl font-bold" style="${btnStyle}">Назад</button>`;
         document.getElementById('wDays').onclick=()=>showCourseInput('days');
         document.getElementById('wMonths').onclick=()=>showCourseInput('months');
-        document.getElementById('wForever').onclick=()=>{ addWizardData.course_days=0; finishWizard(); };
-        document.getElementById('wBack').onclick=()=>{addWizardStep=4;renderWizardStep();};
-
-        function showCourseInput(type){
-            const unit=type==='months'?'месяцев':'дней';
-            wc.innerHTML=`
-                <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Введите количество ${unit}</h3>
-                <input id="wCourse" type="number" class="${inp}" style="background:var(--surface-hover);color:var(--text-primary)">
-                <div class="flex gap-3">
-                    <button id="wConfirm" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold">Сохранить</button>
-                    <button id="wBack2" class="flex-1 py-3 rounded-xl font-bold" style="${btnStyle}">Назад</button>
-                </div>`;
-            document.getElementById('wConfirm').onclick=()=>{
-                let v=parseInt(document.getElementById('wCourse').value);
-                if(isNaN(v)||v<=0){showToast('❌ Введите корректное количество',true);return;}
-                if(type==='months') v*=30;
-                addWizardData.course_days=v; finishWizard();
-            };
-            document.getElementById('wBack2').onclick=()=>{addWizardStep=5;renderWizardStep();};
-        }
-    }
-}
-
-async function finishWizard(){
-    try{
-        const payload={
-            name:addWizardData.name, form:addWizardData.form,
-            unit_mg:addWizardData.unit_mg, units:addWizardData.units,
-            daily_mg:addWizardData.daily_mg, course_days:addWizardData.course_days||0,
-            chat_id:Number(medsData?.[0]?.chat_id??0)
-        };
-        const r=await fetch('/api/meds/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-        if(r.ok){
+@@ -799,38 +799,38 @@ async function finishWizard(){
             showToast('✅ Лекарство успешно добавлено!');
             document.getElementById('addModal').classList.remove('active');
             await fetchMeds();
@@ -821,9 +789,9 @@ async function syncVersion(){
 document.getElementById('themeToggle').addEventListener('click',toggleTheme);
 document.getElementById('refreshBtn').addEventListener('click',()=>{ showSkeleton(); fetchMeds(); });
 document.getElementById('addMedBtn').addEventListener('click',showAddWizard);
-document.getElementById('bottomCalendar').addEventListener('click',()=>showScreen('screenMain'));
-document.getElementById('bottomSchedule').addEventListener('click',()=>showScreen('screenSchedule'));
-document.getElementById('bottomReminder').addEventListener('click',()=>showScreen('screenReminders'));
+document.getElementById('bottomKit').addEventListener('click',()=>showScreen('screenMain'));
+document.getElementById('bottomForecast').addEventListener('click',()=>showScreen('screenForecast'));
+document.getElementById('bottomReminder').addEventListener('click',()=>showScreen('screenReminder'));
 document.getElementById('addModal').addEventListener('click',e=>{ if(e.target===document.getElementById('addModal')) document.getElementById('addModal').classList.remove('active'); });
 
 initTheme();
