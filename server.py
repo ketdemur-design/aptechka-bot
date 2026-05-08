@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,10 +28,21 @@ DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
 
 logger.info(f"📁 Server использует файл данных: {DATA_FILE.absolute()}")
 
-app = FastAPI()
 _write_lock = asyncio.Lock()
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not DATA_FILE.exists():
+        DATA_FILE.write_text("{}", encoding="utf-8")
+        logger.info(f"🆕 Создан файл данных: {DATA_FILE}")
+    else:
+        logger.info(f"✅ Файл данных найден: {DATA_FILE}")
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,12 +54,6 @@ app.add_middleware(
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-@app.on_event("startup")
-async def ensure_data_file():
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not DATA_FILE.exists():
-        DATA_FILE.write_text("{}", encoding="utf-8")
 
 # ================== МОДЕЛИ ==================
 class AddMedicineRequest(BaseModel):
