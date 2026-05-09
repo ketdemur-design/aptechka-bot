@@ -1,549 +1,530 @@
 import os
 import json
-from datetime import datetime
-from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 import pytz
 import logging
-import asyncio
 
 from settings import APP_VERSION
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ================== КОНФИГУРАЦИЯ ==================
-TZ_MOSCOW = pytz.timezone('Europe/Moscow')
-
-# Используем ТОТ ЖЕ файл, что и в app.py
-DATA_FILE = Path(os.getenv("DATA_FILE", "meds_data.json"))
-
-logger.info(f"📁 Server использует файл данных: {DATA_FILE.absolute()}")
-
-_write_lock = asyncio.Lock()
-
+# ══════════════════════════════════════════════════════
+#  КОНФИГУРАЦИЯ
+# ══════════════════════════════════════════════════════
+TZ_MOSCOW  = pytz.timezone('Europe/Moscow')
+DATA_FILE  = Path("meds_data.json")
 STATIC_DIR = Path(__file__).parent / "static"
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if DATA_FILE.exists():
-        content = DATA_FILE.read_text(encoding="utf-8")
-        preview = content[:200].replace("\n", "\\n")
-        logger.info(f"✅ Файл данных найден: {DATA_FILE}")
-        logger.info(f"🔎 Содержимое файла {DATA_FILE}: {preview}")
-    else:
-        DATA_FILE.write_text("{}", encoding="utf-8")
-        logger.info(f"🆕 Создан файл данных: {DATA_FILE}")
-    yield
+logger.info(f"📁 server.py  данные: {DATA_FILE.absolute()}")
 
-app = FastAPI(lifespan=lifespan)
-
+app = FastAPI(title="MedTracker", version=APP_VERSION)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
 )
-
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# ================== МОДЕЛИ ==================
+# ══════════════════════════════════════════════════════
+#  PYDANTIC-МОДЕЛИ
+# ══════════════════════════════════════════════════════
 class AddMedicineRequest(BaseModel):
-    chat_id: Optional[int] = 0
-    name: str
-    form: str
-    unit_mg: float
-    units: float
-    daily_mg: float
+    chat_id:     Optional[int] = 0
+    name:        str
+    form:        str
+    unit_mg:     float
+    units:       float
+    daily_mg:    float   # уже в «внутренних мг» (daily_units * unit_mg)
     course_days: int = 0
 
 class UpdateMedicineRequest(BaseModel):
-    chat_id: int
+    chat_id:  int
     med_name: str
-    daily_mg: Optional[float] = None
-    add_stock: Optional[float] = None
+    daily_mg:  Optional[float] = None  # новый суточный расход в мг
+    add_stock: Optional[float] = None  # добавить N штук
 
 class StartCourseRequest(BaseModel):
-    chat_id: int
+    chat_id:  int
     med_name: str
 
 class TakenRequest(BaseModel):
-    chat_id: int
+    chat_id:  int
     med_name: str
 
-# ================== РАБОТА С ДАННЫМИ ==================
-def get_now():
+# ══════════════════════════════════════════════════════
+#  РАБОТА С ФАЙЛОМ ДАННЫХ
+# ══════════════════════════════════════════════════════
+def get_now() -> datetime:
     return datetime.now(TZ_MOSCOW)
 
-def load_data_store():
-    """Загружает данные из ТОГО ЖЕ файла, что и бот"""
+def _load() -> dict:
     if not DATA_FILE.exists():
-        logger.warning(f"⚠️ Файл данных не найден: {DATA_FILE}")
         return {}
     try:
-        raw_text = DATA_FILE.read_text(encoding="utf-8")
-        if not raw_text.strip():
-            return {}
-
-        raw = json.loads(raw_text)
-        if not isinstance(raw, dict):
-            logger.error(f"❌ Некорректная структура данных: {type(raw).__name__}")
-            return {}
-
-        normalized = {}
-        for key, value in raw.items():
-            try:
-                normalized[int(key)] = value
-            except (TypeError, ValueError):
-                logger.warning(f"⚠️ Пропущен chat_id с некорректным ключом: {key!r}")
-        return normalized
+        raw = DATA_FILE.read_text(encoding="utf-8").strip()
+        return {int(k): v for k, v in json.loads(raw).items()} if raw else {}
     except Exception as e:
-        logger.error(f"❌ Ошибка загрузки данных: {e}")
+        logger.error(f"load error: {e}")
         return {}
 
-def save_data_store(data_store):
-    """Сохраняет данные в ТОТ ЖЕ файл, что и бот (атомарная запись)."""
+def _save(store: dict) -> bool:
     try:
-        serializable = {str(k): v for k, v in data_store.items()}
-        temp_file = DATA_FILE.with_suffix(".tmp")
-        temp_file.write_text(
-            json.dumps(serializable, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        tmp = DATA_FILE.with_suffix(".tmp")
+        tmp.write_text(
+            json.dumps({str(k): v for k, v in store.items()}, ensure_ascii=False, indent=2),
+            encoding="utf-8"
         )
-        temp_file.replace(DATA_FILE)
-        logger.info(f"💾 Данные сохранены в {DATA_FILE}")
+        tmp.replace(DATA_FILE)
         return True
     except Exception as e:
-        logger.error(f"❌ Ошибка сохранения: {e}")
+        logger.error(f"save error: {e}")
         return False
 
-def calc_days_left(med):
-    if not med.get("daily_mg") or med["daily_mg"] <= 0:
-        return 0
-    capacity_days = int(med["total_mg"] // med["daily_mg"])
-    
-    if not med.get("is_started") or not med.get("start_date"):
-        return capacity_days
-    
-    start_dt = med["start_date"]
-    if isinstance(start_dt, str):
+def _parse_dt(val) -> Optional[datetime]:
+    if isinstance(val, datetime):
+        return val if val.tzinfo else TZ_MOSCOW.localize(val)
+    if isinstance(val, str):
         try:
-            start_dt = datetime.fromisoformat(start_dt)
-            if start_dt.tzinfo is None:
-                start_dt = TZ_MOSCOW.localize(start_dt)
-        except:
-            return capacity_days
-    
-    days_passed = (get_now() - start_dt).days
-    return max(0, capacity_days - days_passed)
+            dt = datetime.fromisoformat(val)
+            return dt if dt.tzinfo else TZ_MOSCOW.localize(dt)
+        except Exception:
+            return None
+    return None
 
-def get_display_units(med):
-    form = med.get("form", "tablets")
+# ══════════════════════════════════════════════════════
+#  РАСЧЁТНЫЕ ФУНКЦИИ
+# ══════════════════════════════════════════════════════
+def calc_total_from_units(form: str, unit_mg: float, units: float) -> float:
+    """
+    Преобразует (количество единиц × размер единицы) во внутренний total_mg.
+    drops:  unit_mg = мл флакона, 0.05 мл = 1 капля  → total = (мл / 0.05) * кол-во_флаконов
+    spray:  unit_mg = мл флакона, 0.10 мл = 1 впрыск → total = (мл / 0.10) * кол-во_флаконов
+    прочие: total = unit_mg * units
+    """
     if form == "drops":
-        return "мл", "капель"
+        return (unit_mg / 0.05) * units
     if form == "spray":
-        return "мл", "впрыскиваний"
-    if form == "liquid":
-        return "мл", "мл"
-    return "мг", "мг"
+        return (unit_mg / 0.10) * units
+    return unit_mg * units
 
-def format_schedule(times_dict):
-    if not times_dict or not isinstance(times_dict, dict):
-        return "не указано"
-    
-    if times_dict.get("Everyday"):
-        return f"Каждый день: {', '.join(times_dict['Everyday'])}"
-    
-    day_names = {"0": "Пн", "1": "Вт", "2": "Ср", "3": "Чт", "4": "Пт", "5": "Сб", "6": "Вс"}
-    lines = []
-    for day in sorted(k for k in times_dict if times_dict[k]):
-        lines.append(f"{day_names.get(day, day)}: {', '.join(times_dict[day])}")
-    
-    return ", ".join(lines) if lines else "не указано"
-
-def calculate_progress(med):
-    course_days = med.get("course_days")
-    if not course_days or course_days <= 0:
-        total_units = calculate_remaining_units({"form": med.get("form"), "total_mg": med.get("initial_total_mg", med.get("total_mg", 0)), "unit_mg": med.get("unit_mg", 0)})
-        current_units = calculate_remaining_units(med)
-        if total_units <= 0:
-            return 0
-        return max(0, min(100, int((current_units / total_units) * 100)))
-    if not med.get("is_started") or not med.get("start_date"):
-        return 0
-    
-    start_dt = med["start_date"]
-    if isinstance(start_dt, str):
-        try:
-            start_dt = datetime.fromisoformat(start_dt)
-            if start_dt.tzinfo is None:
-                start_dt = TZ_MOSCOW.localize(start_dt)
-        except:
-            return 0
-    
-    days_passed = (get_now() - start_dt).days
-    progress = min(100, int((days_passed / course_days) * 100))
-    return max(0, progress)
-
-def get_unit_name(form):
-    unit_map = {
-        "tablets": "табл.",
+def get_unit_name(form: str) -> str:
+    """Название единицы для отображения (штуки вместо мг)."""
+    return {
+        "tablets":  "табл.",
         "capsules": "капс.",
-        "liquid": "мл",
-        "drops": "кап.",
-        "spray": "впрыск."
-    }
-    return unit_map.get(form, "ед.")
+        "liquid":   "мл",
+        "drops":    "кап.",
+        "spray":    "впрыск.",
+        "sachet":   "саше",
+    }.get(form, "ед.")
 
-def calculate_remaining_units(med):
-    total_mg = med.get("total_mg", 0) or 0
-    unit_mg = med.get("unit_mg", 0) or 0
-    if unit_mg <= 0:
-        return 0
-    return total_mg / unit_mg
+def calc_remaining_units(med: dict) -> float:
+    """
+    Остаток в штуках.
+    Формула: total_mg / unit_mg
+    drops/spray: total_mg хранит число единиц (капель/впрыскиваний) — возвращаем напрямую.
+    """
+    form    = med.get("form", "tablets")
+    total   = med.get("total_mg", 0) or 0
+    unit_mg = med.get("unit_mg",  0) or 0
+    if form in ("drops", "spray"):
+        return total          # уже в каплях/впрыскиваниях
+    return (total / unit_mg) if unit_mg > 0 else 0
 
-def calculate_daily_units(med):
+def calc_daily_units(med: dict) -> float:
+    """
+    Суточный расход в штуках.
+    Формула: daily_mg / unit_mg
+    drops/spray: daily_mg уже в каплях/впрыскиваниях.
+    """
+    form     = med.get("form", "tablets")
     daily_mg = med.get("daily_mg", 0) or 0
-    unit_mg = med.get("unit_mg", 0) or 0
-    if unit_mg <= 0:
-        return 0
-    return daily_mg / unit_mg
+    unit_mg  = med.get("unit_mg",  0) or 0
+    if form in ("drops", "spray"):
+        return daily_mg
+    return (daily_mg / unit_mg) if unit_mg > 0 else 0
 
-# ================== API ЭНДПОИНТЫ ==================
+def calc_days_left(med: dict) -> int:
+    """
+    Дней до исчерпания ЗАПАСА (физических таблеток/мл).
+    Логика:
+      1. Считаем сколько дней хватит ТЕКУЩЕГО остатка при суточном расходе:
+         capacity = floor(total_mg / daily_mg)
+      2. Если курс начат — вычитаем уже прошедшие дни (запас расходуется ежедневно):
+         result = capacity - passed_days
+    Итого: это "через сколько дней закончится запас с сегодня".
+    """
+    dmg = med.get("daily_mg") or 0
+    if dmg <= 0:
+        return 0
+    capacity = int((med.get("total_mg") or 0) // dmg)
+    if not med.get("is_started") or not med.get("start_date"):
+        return capacity
+    start = _parse_dt(med["start_date"])
+    if not start:
+        return capacity
+    passed = (get_now() - start).days
+    return max(0, capacity - passed)
+
+def calc_progress(med: dict) -> int:
+    """
+    Прогресс шкалы (%):
+
+    Курс N дней:
+      progress = прошедшие_дни / N * 100
+      Смысл: сколько процентов курса уже пройдено.
+      0% — только начали, 100% — курс завершён.
+
+    Пожизненный (course_days == 0 или None):
+      progress = (1 - остаток_в_штуках / начальный_запас_в_штуках) * 100
+      Смысл: сколько процентов упаковки израсходовано.
+      0% — полная упаковка, 100% — всё выпито.
+      Если initial_units не сохранён — считаем через дни
+      (прошло / (прошло + осталось)).
+    """
+    cd = med.get("course_days") or 0
+
+    if cd > 0:
+        # ── курсовой: % пройденных дней ──
+        if not med.get("is_started") or not med.get("start_date"):
+            return 0
+        start = _parse_dt(med["start_date"])
+        if not start:
+            return 0
+        passed = (get_now() - start).days
+        return max(0, min(100, int(passed / cd * 100)))
+
+    else:
+        # ── пожизненный: % израсходованного ──
+        init    = med.get("initial_units")
+        unit_mg = med.get("unit_mg") or 0
+        total   = med.get("total_mg") or 0
+
+        if init and init > 0 and unit_mg > 0:
+            rem_units = total / unit_mg
+            return max(0, min(100, int((1 - rem_units / init) * 100)))
+
+        # fallback: прошло / (прошло + осталось)
+        dmg = med.get("daily_mg") or 0
+        if not dmg or not med.get("is_started") or not med.get("start_date"):
+            return 0
+        start = _parse_dt(med["start_date"])
+        if not start:
+            return 0
+        capacity = max(1, int(total // dmg))    # дней осталось сегодня
+        passed   = (get_now() - start).days      # дней прошло
+        horizon  = capacity + passed             # начальный запас в днях
+        return max(0, min(100, int(passed / horizon * 100)))
+
+def format_schedule(times: dict) -> str:
+    if not isinstance(times, dict) or not times:
+        return "не указано"
+    if times.get("Everyday"):
+        return f"Каждый день: {', '.join(times['Everyday'])}"
+    dn    = {"0":"Пн","1":"Вт","2":"Ср","3":"Чт","4":"Пт","5":"Сб","6":"Вс"}
+    parts = [f"{dn.get(d,d)}: {', '.join(times[d])}" for d in sorted(times) if times.get(d)]
+    return " | ".join(parts) if parts else "не указано"
+
+def build_med_row(name: str, med: dict, chat_id: int) -> dict:
+    """Собирает полный словарь для ответа /api/meds."""
+    form          = med.get("form", "tablets")
+    cd            = med.get("course_days") or 0
+    is_started    = med.get("is_started", False)
+    days_left     = calc_days_left(med)
+    progress      = calc_progress(med)
+    rem_units     = calc_remaining_units(med)
+    daily_units   = calc_daily_units(med)
+    unit_name     = get_unit_name(form)
+    schedule      = format_schedule(med.get("times", {}))
+
+    # прогнозные поля
+    end_date         = None
+    course_days_left = None
+    is_enough        = True
+
+    if cd > 0 and is_started and med.get("start_date"):
+        start = _parse_dt(med["start_date"])
+        if start:
+            passed           = max(0, (get_now() - start).days)
+            course_days_left = max(0, cd - passed)
+            end_date         = (start + timedelta(days=cd)).strftime("%d.%m.%Y")
+            # хватит ли запаса до конца курса?
+            is_enough        = days_left >= course_days_left
+
+    return {
+        # идентификация
+        "name":             name,
+        "chat_id":          chat_id,
+        # форма
+        "form":             form,
+        # внутренние единицы (мг)
+        "daily_mg":         med.get("daily_mg", 0),
+        "unit_mg":          med.get("unit_mg",  0),
+        "total_mg":         med.get("total_mg", 0),
+        # штуки для отображения
+        "remaining_units":  round(rem_units, 2),
+        "daily_units":      round(daily_units, 2),
+        "unit_name":        unit_name,
+        "dose_line":        f"{round(daily_units, 2)} {unit_name}/сут",
+        # курс
+        "course_days":      cd,
+        "is_started":       is_started,
+        "days_left":        days_left,
+        "progress":         progress,
+        # прогноз
+        "is_enough":        is_enough,
+        "end_date":         end_date,
+        "course_days_left": course_days_left,
+        # расписание
+        "schedule":         schedule,
+        "times":            med.get("times", {}),
+    }
+
+# ══════════════════════════════════════════════════════
+#  API ЭНДПОИНТЫ
+# ══════════════════════════════════════════════════════
 @app.get("/api/meds")
 async def get_meds(chat_id: Optional[int] = None):
-    """Получить все лекарства"""
-    logger.info("GET /api/meds called")
-    data_store = load_data_store()
-    
+    logger.info("GET /api/meds")
+    store = _load()
     if chat_id is None:
-        if data_store:
-            chat_id = list(data_store.keys())[0]
-        else:
+        chat_id = next(iter(store), None)
+        if chat_id is None:
             return []
-    
-    meds = data_store.get(chat_id, {})
-    result = []
-    
-    for name, med in meds.items():
-        days_left = calc_days_left(med)
-        _, dose_label = get_display_units(med)
-        progress = calculate_progress(med)
-        schedule = format_schedule(med.get("times", {}))
-        form = med.get("form", "tablets")
-        remaining_units = calculate_remaining_units(med)
-        daily_units = calculate_daily_units(med)
-        unit_name = get_unit_name(form)
-        course_days = med.get("course_days", 0) or 0
-        is_enough = True
-        if course_days > 0 and med.get("is_started") and med.get("start_date"):
-            start_dt = med["start_date"]
-            if isinstance(start_dt, str):
-                try:
-                    start_dt = datetime.fromisoformat(start_dt)
-                    if start_dt.tzinfo is None:
-                        start_dt = TZ_MOSCOW.localize(start_dt)
-                except:
-                    start_dt = None
-            if start_dt:
-                days_passed = max(0, (get_now() - start_dt).days)
-                course_days_left = max(0, course_days - days_passed)
-                is_enough = days_left >= course_days_left
-        
-        result.append({
-            "name": name,
-            "chat_id": chat_id,
-            "form": form,
-            "daily_mg": med.get("daily_mg", 0),
-            "unit_mg": med.get("unit_mg", 0),
-            "total_mg": med.get("total_mg", 0),
-            "course_days": course_days,
-            "is_started": med.get("is_started", False),
-            "days_left": days_left,
-            "dose_label": dose_label,
-            "progress": progress,
-            "schedule": schedule,
-            "remaining_units": round(remaining_units, 2),
-            "daily_units": round(daily_units, 2),
-            "unit_name": unit_name,
-            "is_enough": is_enough,
-            "remaining_doses": int(med.get("total_mg", 0) / med.get("daily_mg", 1)) if med.get("daily_mg", 0) > 0 else 0,
-            "dose_line": f"{med.get('daily_mg', 0)} {dose_label}/сут"
-        })
-    
-    logger.info(f"Returning {len(result)} medicines")
+    result = [build_med_row(n, m, chat_id) for n, m in store.get(chat_id, {}).items()]
+    logger.info(f"  → {len(result)} записей")
     return result
 
-@app.get("/service-worker.js")
-async def service_worker():
-    sw_path = STATIC_DIR / "service-worker.js"
-    if sw_path.exists():
-        return FileResponse(sw_path, media_type="application/javascript")
-    raise HTTPException(status_code=404, detail="service-worker.js not found")
 
 @app.post("/api/meds/add")
 async def add_medicine(req: AddMedicineRequest):
-    """Добавить новое лекарство"""
-    logger.info(f"POST /api/meds/add called with: {req.name}, {req.form}")
+    logger.info(f"POST /api/meds/add  name={req.name}")
     try:
-        data_store = load_data_store()
-        chat_id = req.chat_id
-        if chat_id in (None, 0):
-            chat_id = next(iter(data_store), 12345)
-        
+        store   = _load()
+        chat_id = req.chat_id or next(iter(store), 12345)
+
         req_name = req.name.strip()
         if not req_name:
-            raise HTTPException(status_code=400, detail="Название лекарства не может быть пустым")
+            raise HTTPException(400, "Название не может быть пустым")
+        if req_name in store.get(chat_id, {}):
+            raise HTTPException(400, "Лекарство с таким названием уже существует")
 
-        # Пересчёт общего запаса
-        if req.form == "drops":
-            total_resource = (req.unit_mg / 0.05) * req.units
-        elif req.form == "spray":
-            total_resource = (req.unit_mg / 0.1) * req.units
-        else:
-            total_resource = req.unit_mg * req.units
-        
-        logger.info(f"Total resource calculated: {total_resource}")
-        
-        # Проверяем, не существует ли уже лекарство
-        if req_name in data_store.get(chat_id, {}):
-            logger.warning(f"Medicine {req_name} already exists")
-            raise HTTPException(status_code=400, detail="Лекарство с таким названием уже существует")
-        
-        # Создаем запись
-        data_store.setdefault(chat_id, {})[req_name] = {
-            "form": req.form,
-            "daily_mg": req.daily_mg,
-            "unit_mg": req.unit_mg,
-            "total_mg": total_resource,
-            "course_days": req.course_days if req.course_days > 0 else None,
-            "created": get_now().isoformat(),
-            "is_started": False,
-            "start_date": None,
-            "times": {},
-            "notified": False,
+        # total_mg — внутреннее хранение
+        total = calc_total_from_units(req.form, req.unit_mg, req.units)
+
+        store.setdefault(chat_id, {})[req_name] = {
+            "form":              req.form,
+            "daily_mg":          req.daily_mg,   # уже в «мг» (daily_units * unit_mg)
+            "unit_mg":           req.unit_mg,
+            "total_mg":          total,
+            "initial_units":     req.units,      # запоминаем для % пожизненного прогресса
+            "course_days":       req.course_days if req.course_days > 0 else None,
+            "created":           get_now().isoformat(),
+            "is_started":        False,
+            "start_date":        None,
+            "times":             {},
+            "notified":          False,
             "last_reminder_key": None,
-            "last_9am_key": None,
+            "last_9am_key":      None,
         }
-        
-        # Сохраняем
-        async with _write_lock:
-            ok = save_data_store(data_store)
-        if ok:
-            days = calc_days_left(data_store[chat_id][req_name])
-            logger.info(f"✅ Added medicine: {req_name}, lasts {days} days")
-            return {"success": True, "message": f"✅ Лекарство добавлено! Хватит на {days} дней", "name": req_name}
-        else:
-            logger.error("Failed to save data")
-            raise HTTPException(status_code=500, detail="Ошибка сохранения данных")
-            
+
+        if not _save(store):
+            raise HTTPException(500, "Ошибка сохранения")
+
+        med  = store[chat_id][req_name]
+        days = calc_days_left(med)
+        un   = get_unit_name(req.form)
+        rem  = round(calc_remaining_units(med), 1)
+        dly  = round(calc_daily_units(med), 2)
+
+        return {
+            "success": True,
+            "message": f"✅ Лекарство успешно добавлено!\nЗапас: {rem} {un}. Расход: {dly} {un}/сут. Хватит на {days} дней.",
+            "name": req_name
+        }
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error adding medicine: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(e)
+        raise HTTPException(500, str(e))
+
 
 @app.post("/api/meds/update")
 async def update_medicine(req: UpdateMedicineRequest):
-    """Обновить дозировку или пополнить запас"""
-    logger.info(f"POST /api/meds/update called for {req.med_name}")
+    logger.info(f"POST /api/meds/update  {req.med_name}")
     try:
-        data_store = load_data_store()
-        
-        if req.chat_id not in data_store:
-            raise HTTPException(status_code=404, detail="Чат не найден")
-        if req.med_name not in data_store[req.chat_id]:
-            raise HTTPException(status_code=404, detail="Лекарство не найдено")
-        
-        med = data_store[req.chat_id][req.med_name]
-        
+        store = _load()
+        if req.chat_id not in store:
+            raise HTTPException(404, "Чат не найден")
+        if req.med_name not in store[req.chat_id]:
+            raise HTTPException(404, "Лекарство не найдено")
+
+        med = store[req.chat_id][req.med_name]
+        un  = get_unit_name(med.get("form", "tablets"))
+
         if req.daily_mg is not None:
+            # daily_mg уже в «внутренних мг»
             med["daily_mg"] = req.daily_mg
-            async with _write_lock:
-                ok = save_data_store(data_store)
-            if ok:
-                days = calc_days_left(med)
-                return {"success": True, "message": f"Дозировка изменена! Хватит на {days} дн."}
-        
+            if not _save(store):
+                raise HTTPException(500, "Ошибка сохранения")
+            days = calc_days_left(med)
+            dly  = round(calc_daily_units(med), 2)
+            return {"success": True, "message": f"✅ Дозировка изменена! {dly} {un}/сут. Хватит на {days} дн."}
+
         if req.add_stock is not None:
-            form = med.get("form", "tablets")
-            if form == "drops":
-                added = (med["unit_mg"] / 0.05) * req.add_stock
-            elif form == "spray":
-                added = (med["unit_mg"] / 0.1) * req.add_stock
-            else:
-                added = med["unit_mg"] * req.add_stock
-            
+            # add_stock — количество штук/единиц
+            unit_mg = med.get("unit_mg", 1)
+            added   = calc_total_from_units(med.get("form", "tablets"), unit_mg, req.add_stock)
             med["total_mg"] += added
-            med["notified"] = False
-            
-            async with _write_lock:
-                ok = save_data_store(data_store)
-            if ok:
-                return {"success": True, "message": "🔄 Пополнено!"}
-        
-        raise HTTPException(status_code=500, detail="Ошибка сохранения")
-        
+            med["notified"]  = False
+            # обновляем initial_units для корректного % пожизненного прогресса
+            if not med.get("course_days"):
+                med["initial_units"] = (med.get("initial_units") or 0) + req.add_stock
+            if not _save(store):
+                raise HTTPException(500, "Ошибка сохранения")
+            days = calc_days_left(med)
+            rem  = round(calc_remaining_units(med), 1)
+            return {"success": True, "message": f"🔄 Пополнено! Остаток: {rem} {un}. Хватит на {days} дн."}
+
+        raise HTTPException(400, "Нечего обновлять")
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating medicine: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(e)
+        raise HTTPException(500, str(e))
+
 
 @app.post("/api/meds/start")
 async def start_course(req: StartCourseRequest):
-    """Начать курс лекарства"""
-    logger.info(f"POST /api/meds/start called for {req.med_name}")
+    logger.info(f"POST /api/meds/start  {req.med_name}")
     try:
-        data_store = load_data_store()
-        
-        if req.chat_id not in data_store:
-            raise HTTPException(status_code=404, detail="Чат не найден")
-        if req.med_name not in data_store[req.chat_id]:
-            raise HTTPException(status_code=404, detail="Лекарство не найдено")
-        
-        med = data_store[req.chat_id][req.med_name]
+        store = _load()
+        if req.chat_id not in store:
+            raise HTTPException(404, "Чат не найден")
+        if req.med_name not in store[req.chat_id]:
+            raise HTTPException(404, "Лекарство не найдено")
+
+        med = store[req.chat_id][req.med_name]
         med["is_started"] = True
         med["start_date"] = get_now().isoformat()
-        
-        async with _write_lock:
-            ok = save_data_store(data_store)
-        if ok:
-            return {"success": True, "message": f"Курс «{req.med_name}» начат!"}
-        else:
-            raise HTTPException(status_code=500, detail="Ошибка сохранения")
-            
+        med["notified"]   = False
+
+        if not _save(store):
+            raise HTTPException(500, "Ошибка сохранения")
+        return {"success": True, "message": f"▶️ Курс «{req.med_name}» начат!"}
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error starting course: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(e)
+        raise HTTPException(500, str(e))
+
 
 @app.post("/api/taken")
 async def mark_taken(req: TakenRequest):
-    """Отметить приём лекарства"""
-    logger.info(f"POST /api/taken called for {req.med_name}")
+    """
+    Отмечает приём одной дозы.
+    Возвращает updated-поля для мгновенного обновления шкалы на фронте
+    без полного перезапроса /api/meds.
+    """
+    logger.info(f"POST /api/taken  {req.med_name}")
     try:
-        data_store = load_data_store()
-        
-        if req.chat_id in data_store and req.med_name in data_store[req.chat_id]:
-            med = data_store[req.chat_id][req.med_name]
-            
-            times_dict = med.get("times", {})
-            doses_count = 1
-            for times in times_dict.values():
-                if times:
-                    doses_count = max(doses_count, len(times))
-            
-            per_dose = med["daily_mg"] / doses_count if doses_count > 0 else med["daily_mg"]
+        store   = _load()
+        updated = {}
+
+        if req.chat_id in store and req.med_name in store[req.chat_id]:
+            med = store[req.chat_id][req.med_name]
+
+            # вычисляем дозу одного приёма
+            t_dict = med.get("times", {})
+            dc = 1
+            for t in t_dict.values():
+                if t:
+                    dc = max(dc, len(t))
+            per_dose = med["daily_mg"] / dc if dc > 0 else med["daily_mg"]
+
             med["total_mg"] = max(0, med["total_mg"] - per_dose)
-            
-            async with _write_lock:
-                save_data_store(data_store)
-            return {"success": True, "message": "Приём отмечен"}
-        
-        return {"success": True, "message": "Приём отмечен"}
-        
+            _save(store)
+
+            # свежие данные для мгновенного обновления фронта
+            updated = {
+                "total_mg":       round(med["total_mg"], 4),
+                "remaining_units": round(calc_remaining_units(med), 2),
+                "daily_units":     round(calc_daily_units(med), 2),
+                "days_left":       calc_days_left(med),
+                "progress":        calc_progress(med),
+            }
+
+        return {"success": True, "message": "✅ Приём отмечен!", "updated": updated}
+
     except Exception as e:
-        logger.error(f"Error marking taken: {e}")
-        return {"success": True, "message": "Приём отмечен"}
+        logger.error(e)
+        return {"success": True, "message": "✅ Приём отмечен!", "updated": {}}
+
 
 @app.delete("/api/meds")
 async def delete_medicine(chat_id: int, med_name: str):
-    """Удалить лекарство"""
-    logger.info(f"DELETE /api/meds called for {med_name}")
+    logger.info(f"DELETE /api/meds  {med_name}")
     try:
-        data_store = load_data_store()
-        
-        if chat_id in data_store and med_name in data_store[chat_id]:
-            del data_store[chat_id][med_name]
-            
-            async with _write_lock:
-                ok = save_data_store(data_store)
-            if ok:
-                return {"success": True, "message": "Лекарство удалено"}
-        
-        raise HTTPException(status_code=404, detail="Лекарство не найдено")
-        
+        store = _load()
+        if chat_id in store and med_name in store[chat_id]:
+            del store[chat_id][med_name]
+            if _save(store):
+                return {"success": True, "message": "🗑 Лекарство удалено"}
+        raise HTTPException(404, "Лекарство не найдено")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting medicine: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(e)
+        raise HTTPException(500, str(e))
+
 
 @app.get("/api/version")
 async def get_version():
     return {"version": APP_VERSION}
 
 @app.get("/health")
-async def health_check():
-    """Проверка работоспособности"""
-    return {"status": "ok", "data_file": str(DATA_FILE), "exists": DATA_FILE.exists()}
+async def health():
+    return {
+        "status":    "ok",
+        "version":   APP_VERSION,
+        "data_file": str(DATA_FILE),
+        "exists":    DATA_FILE.exists(),
+    }
 
 @app.get("/test")
 async def test():
-    """Тестовый эндпоинт"""
-    return {"message": "Server is working!"}
+    return {"message": "Server is working!", "version": APP_VERSION}
 
-@app.get("/manifest.json")
-async def manifest():
-    """PWA manifest"""
-    manifest_path = STATIC_DIR / "manifest.json"
-    if manifest_path.exists():
-        return FileResponse(manifest_path, media_type="application/manifest+json")
-    raise HTTPException(status_code=404, detail="manifest not found")
-
-@app.get("/service-worker.js")
-async def service_worker():
-    """PWA service worker"""
-    sw_path = STATIC_DIR / "service-worker.js"
-    if sw_path.exists():
-        return FileResponse(sw_path, media_type="application/javascript")
-    raise HTTPException(status_code=404, detail="service worker not found")
-
-@app.get("/favicon.ico")
-async def favicon():
-    """Return favicon if available, otherwise no-content to avoid noisy 404 logs."""
-    favicon_path = STATIC_DIR / "favicon.ico"
-    if favicon_path.exists():
-        return FileResponse(favicon_path, media_type="image/x-icon")
-    return Response(status_code=204)
-
-# ================== ГЛАВНАЯ СТРАНИЦА ==================
 @app.get("/")
 async def root():
-    """Возвращает главную страницу"""
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    else:
-        return {"status": "ok", "service": "MedTracker API", "version": "V.55", "error": "index.html not found"}
+    p = STATIC_DIR / "index.html"
+    return FileResponse(p) if p.exists() else {"status": "ok", "error": "index.html not found"}
 
-# ================== ЗАПУСК ==================
+# ══════════════════════════════════════════════════════
+#  ЗАПУСК
+# ══════════════════════════════════════════════════════
 def run_server():
     port = int(os.getenv("PORT", 3000))
     host = os.getenv("HOST", "0.0.0.0")
-    
-    print(f"\n{'='*50}")
-    print(f"🚀 MedTracker API Server")
-    print(f"📁 Файл данных: {DATA_FILE.absolute()}")
-    print(f"📄 HTML файл: {STATIC_DIR / 'index.html'}")
-    print(f"🌐 Адрес: http://{host}:{port}")
-    print(f"📊 Health check: http://{host}:{port}/health")
-    print(f"🧪 Test endpoint: http://{host}:{port}/test")
-    print(f"{'='*50}\n")
-    
+    print(f"\n{'='*55}")
+    print(f"🚀  MedTracker API  v{APP_VERSION}")
+    print(f"📁  данные:  {DATA_FILE.absolute()}")
+    print(f"📄  HTML:    {STATIC_DIR / 'index.html'}")
+    print(f"🌐  http://{host}:{port}")
+    print(f"{'='*55}\n")
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 if __name__ == "__main__":
