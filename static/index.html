@@ -297,36 +297,26 @@ async function doTake(chatId, name, cardEl){
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
-    toast(d.message || '✅ Приём отмечен!');
 
-    const u   = d.updated;
+    const u   = d.updated || {};
     const idx = medsData.findIndex(m => m.name === name && m.chat_id === chatId);
 
-    if (u && Object.keys(u).length && idx !== -1) {
+    if (idx !== -1 && Object.keys(u).length) {
+      // обновляем кэш — прогресс теперь всегда берём с сервера (taken_doses персистентен)
+      Object.assign(medsData[idx], u);
       const med = medsData[idx];
+      const p   = u.progress ?? med.progress ?? 0;
 
-      // ── считаем новый прогресс ──
-      const cd = med.course_days || 0;
-      let newProgress;
+      if (cardEl) applyProgressToCard(cardEl, med, p, u);
 
-      if (cd > 0) {
-        // Курсовой режим: прогресс считается по дням, сервер его не меняет при нажатии Выпил.
-        // Добавляем шаг = 1 приём / (кол-во_приёмов_в_сутки * дней_курса) * 100
-        const timesPerDay = countTimesPerDay(med);
-        const stepPct     = 100 / (cd * timesPerDay);
-        newProgress = Math.min(100, Math.round(((med.progress || 0) + stepPct) * 10) / 10);
+      // уведомление о завершении курса
+      if (u.course_done) {
+        showCourseFinishedBanner(name, cardEl);
       } else {
-        // Пожизненный: сервер вернул актуальный % расхода
-        newProgress = u.progress ?? med.progress ?? 0;
-      }
-
-      // обновляем кэш
-      Object.assign(med, u, { progress: newProgress });
-
-      if (cardEl) {
-        applyProgressToCard(cardEl, med, newProgress, u);
+        toast(d.message || '✅ Приём отмечен!');
       }
     } else {
+      toast(d.message || '✅ Приём отмечен!');
       await fetchMeds();
     }
   } catch(e) {
@@ -335,17 +325,24 @@ async function doTake(chatId, name, cardEl){
   }
 }
 
-// сколько приёмов в сутки у лекарства
-function countTimesPerDay(med){
-  const times = med.times || {};
-  let max = 1;
-  for (const t of Object.values(times)){
-    if (Array.isArray(t) && t.length > max) max = t.length;
-  }
-  return max;
+// Баннер «Курс завершён» поверх карточки
+function showCourseFinishedBanner(name, cardEl) {
+  // toast с особым стилем
+  document.querySelector('.toast')?.remove();
+  const t = document.createElement('div');
+  t.className = 'toast fixed bottom-28 left-1/2 -translate-x-1/2 z-50 px-6 py-4 rounded-2xl text-white font-bold shadow-2xl text-center';
+  t.style.cssText = 'background:linear-gradient(135deg,#7c3aed,#10b981);white-space:nowrap;font-size:15px;';
+  t.innerHTML = `🎉 Курс «${name}» завершён!`;
+  document.body.appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'all .4s';
+    t.style.opacity = '0';
+    t.style.transform = 'translate(-50%,20px)';
+    setTimeout(() => { t.remove(); fetchMeds(); }, 400);
+  }, 4000);
 }
 
-// патч DOM карточки без перерендера
+// патч DOM карточки без полного перерендера
 function applyProgressToCard(cardEl, med, p, u){
   const un     = med.unit_name ?? 'ед.';
   const rem    = fmtN(u ? (u.remaining_units ?? med.remaining_units) : med.remaining_units);
@@ -380,14 +377,14 @@ function applyProgressToCard(cardEl, med, p, u){
   const cInd = cardEl.querySelector('.course-indicator');
   if (cInd){
     const cd = med.course_days || 0;
-    const enough = (med.days_left || 0) >= (med.course_days_left || 0);
+    const enough = med.is_enough;
     cInd.textContent = cd === 0
       ? `● ЗАПАС: ${rem} ${un}`
       : (enough ? '● НА КУРС ХВАТИТ' : '● НА КУРС НЕ ХВАТИТ');
     cInd.style.color = (cd === 0 || enough) ? '#10b981' : '#f43f5e';
   }
 
-  // дней осталось
+  // дней до конца курса
   const dlBadge = cardEl.querySelector('.days-left-badge');
   if (dlBadge){
     dlBadge.textContent = `${dl} дн. ост.`;
@@ -534,7 +531,7 @@ function renderMeds(){
       <div>
         <h3 class="med-title font-bold text-lg uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</h3>
         <div class="flex items-center gap-2 mt-0.5">
-          <p class="text-sm font-medium" style="color:var(--text-secondary)">${dlyU} ${un}/сут</p>
+          <p class="text-sm font-medium" style="color:var(--text-secondary)">${fmtN(med.daily_mg)} мг/сут</p>
           <div class="w-1 h-1 rounded-full" style="background:rgba(148,163,184,.35)"></div>
           <p class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--text-secondary)">${cd === 0 ? 'Пожизненно ♾' : `Курс: ${cd} дн.`}</p>
         </div>
@@ -923,9 +920,12 @@ function renderWizard(){
 
   } else if (wStep === 4){
     const f  = wData.form;
-    const un = {'drops':'капель','spray':'впрыскиваний','liquid':'мл','tablets':'таблеток','capsules':'капсул','sachet':'саше'}[f] || 'штук';
+    // для drops/spray — спрашиваем в единицах, для остальных — в мг
+    const isLiquid = (f === 'drops' || f === 'spray');
+    const un = {'drops':'капель','spray':'впрыскиваний','liquid':'мл'}[f] || 'мг';
+    const qLabel = isLiquid ? `Сколько ${un} в сутки принимать?` : 'Сколько мг в сутки принимать?';
     wc.innerHTML = `
-      <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Сколько ${un} в сутки принимать?</h3>
+      <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">${qLabel}</h3>
       <input id="wDaily" type="number" step="any" min="0.1" class="${INP}" style="background:var(--surface-hover);color:var(--text-primary)">
       <div class="flex gap-3">
         <button id="wNext" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold">Далее</button>
@@ -934,7 +934,7 @@ function renderWizard(){
     document.getElementById('wNext').onclick = () => {
       const v = parseFloat(document.getElementById('wDaily').value);
       if (isNaN(v) || v <= 0){ toast('❌ Укажите дозировку', true); return; }
-      wData.daily_units = v; wStep = 5; renderWizard();
+      wData.daily_mg_input = v; wStep = 5; renderWizard();
     };
     document.getElementById('wBack').onclick = () => { wStep = 3; renderWizard(); };
 
@@ -976,7 +976,7 @@ function renderWizard(){
 async function finishWizard(){
   try {
     // Проверяем все обязательные поля перед отправкой
-    if (!wData.name || !wData.form || !wData.unit_mg || !wData.units || !wData.daily_units) {
+    if (!wData.name || !wData.form || !wData.unit_mg || !wData.units || !wData.daily_mg_input) {
       console.error('finishWizard: неполные данные', wData);
       toast('❌ Заполните все поля', true);
       return;
@@ -984,10 +984,12 @@ async function finishWizard(){
 
     const form     = wData.form;
     const unit_mg  = Number(wData.unit_mg);
-    // daily_mg во внутренних единицах (мг/капли/впрыскивания)
-    const daily_mg = (form === 'drops' || form === 'spray')
-      ? Number(wData.daily_units)
-      : Number(wData.daily_units) * unit_mg;
+    // daily_mg_input: для drops/spray — уже в каплях/впрыскиваниях
+    // для таблеток/капсул — пользователь ввёл МГ, передаём напрямую
+    const isLiquid = (form === 'drops' || form === 'spray');
+    const daily_mg = isLiquid
+      ? Number(wData.daily_mg_input)
+      : Number(wData.daily_mg_input);   // мг/сут — прямо как ввёл
 
     const payload = {
       name:        wData.name.trim(),
