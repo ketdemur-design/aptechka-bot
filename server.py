@@ -97,7 +97,7 @@ def _parse_dt(val) -> Optional[datetime]:
 # ══ РАСЧЁТЫ ══
 
 def calc_total_from_units(form: str, unit_mg: float, units: float) -> float:
-    """Кол-во единиц × размер → внутренний total_mg."""
+    """Количество единиц × размер единицы → внутренний total_mg."""
     if form == "drops":
         return (unit_mg / 0.05) * units
     if form == "spray":
@@ -112,7 +112,10 @@ def get_unit_name(form: str) -> str:
     }.get(form, "ед.")
 
 def calc_remaining_units(med: dict) -> float:
-    """Остаток в штуках: total_mg / unit_mg."""
+    """
+    Остаток в штуках: total_mg / unit_mg.
+    Одна таблетка = unit_mg мг, поэтому остаток в штуках = total_mg / unit_mg.
+    """
     form    = med.get("form", "tablets")
     total   = med.get("total_mg", 0) or 0
     unit_mg = med.get("unit_mg",  0) or 0
@@ -121,7 +124,10 @@ def calc_remaining_units(med: dict) -> float:
     return (total / unit_mg) if unit_mg > 0 else 0
 
 def calc_daily_units(med: dict) -> float:
-    """Суточный расход в штуках: daily_mg / unit_mg."""
+    """
+    Суточный расход в штуках: daily_mg / unit_mg.
+    Пример: 200 мг/сут при таблетке 100 мг = 2 табл./сут.
+    """
     form     = med.get("form", "tablets")
     daily_mg = med.get("daily_mg", 0) or 0
     unit_mg  = med.get("unit_mg",  0) or 0
@@ -129,30 +135,50 @@ def calc_daily_units(med: dict) -> float:
         return daily_mg
     return (daily_mg / unit_mg) if unit_mg > 0 else 0
 
+def doses_per_day(med: dict) -> int:
+    """
+    Количество приёмов в сутки.
+    Считается как daily_mg / unit_mg (сколько таблеток в сутки).
+    Если расписание не задано — используем это значение.
+    Минимум 1.
+    Пример: 200 мг/сут, таблетка 100 мг → 2 приёма в сутки.
+    """
+    dpd_calc = calc_daily_units(med)
+    dpd = max(1, round(dpd_calc)) if dpd_calc > 0 else 1
+
+    # если в расписании явно задано больше — берём из расписания
+    times = med.get("times", {})
+    for t in times.values():
+        if isinstance(t, list) and len(t) > dpd:
+            dpd = len(t)
+    return dpd
+
 def calc_days_left_in_course(med: dict) -> int:
     """
-    Дней до конца КУРСА (не до исчерпания запаса).
-    Курс N дней: дней осталось = N - прошедших_дней.
-    Пожизненно: дней осталось по запасу.
+    Дней до конца КУРСА.
+
+    Курс N дней:
+      Считаем по taken_doses — каждые doses_per_day нажатий = 1 день.
+      days_passed = taken_doses / doses_per_day
+      days_left   = course_days - days_passed
+
+    Пожизненно:
+      Дней по запасу = total_mg / daily_mg.
     """
     cd = med.get("course_days") or 0
     if cd > 0:
-        if not med.get("is_started") or not med.get("start_date"):
-            return cd
-        start = _parse_dt(med["start_date"])
-        if not start:
-            return cd
-        passed = (get_now() - start).days
-        return max(0, cd - passed)
+        taken  = med.get("taken_doses", 0) or 0
+        dpd    = doses_per_day(med)
+        passed = taken / dpd          # дней прошло (дробное)
+        return max(0, int(cd - passed))
     else:
-        # пожизненно — дней по запасу
         dmg = med.get("daily_mg") or 0
         if dmg <= 0:
             return 0
         return int((med.get("total_mg") or 0) // dmg)
 
 def calc_stock_days(med: dict) -> int:
-    """Дней до исчерпания ЗАПАСА (сколько таблеток осталось / суточный расход)."""
+    """Дней до исчерпания ЗАПАСА = total_mg / daily_mg."""
     dmg = med.get("daily_mg") or 0
     if dmg <= 0:
         return 0
@@ -160,14 +186,11 @@ def calc_stock_days(med: dict) -> int:
 
 def calc_progress(med: dict) -> int:
     """
-    Прогресс шкалы (%):
+    Прогресс шкалы (%).
 
     Курс N дней:
-      Считаем по taken_doses (реальные нажатия «Выпил») чтобы шкала
-      не сбрасывалась при перезагрузке страницы.
-      taken_doses — суммарное число принятых доз, хранится в JSON.
-      total_doses = course_days * doses_per_day (кол-во приёмов в сутки).
-      progress = taken_doses / total_doses * 100.
+      progress = taken_doses / (course_days * doses_per_day) * 100
+      Персистентно — не сбрасывается при перезагрузке.
 
     Пожизненно:
       progress = % израсходованного от initial_units.
@@ -175,13 +198,8 @@ def calc_progress(med: dict) -> int:
     cd = med.get("course_days") or 0
 
     if cd > 0:
-        taken  = med.get("taken_doses", 0) or 0
-        # doses_per_day — сколько приёмов в сутки (из расписания или 1)
-        times  = med.get("times", {})
-        dpd    = 1
-        for t in times.values():
-            if isinstance(t, list) and len(t) > dpd:
-                dpd = len(t)
+        taken       = med.get("taken_doses", 0) or 0
+        dpd         = doses_per_day(med)
         total_doses = cd * dpd
         if total_doses <= 0:
             return 0
@@ -194,31 +212,33 @@ def calc_progress(med: dict) -> int:
         if init and init > 0 and unit_mg > 0:
             rem = total / unit_mg
             return max(0, min(100, int((1 - rem / init) * 100)))
-        # fallback по дням
+        # fallback по запасу
         dmg = med.get("daily_mg") or 0
-        if not dmg or not med.get("is_started") or not med.get("start_date"):
+        if not dmg:
             return 0
-        start = _parse_dt(med["start_date"])
-        if not start:
+        stock = calc_stock_days(med)
+        init_days = stock + (med.get("taken_doses", 0) or 0)
+        if init_days <= 0:
             return 0
-        capacity = max(1, int(total // dmg))
-        passed   = (get_now() - start).days
-        horizon  = capacity + passed
-        return max(0, min(100, int(passed / horizon * 100)))
+        taken = med.get("taken_doses", 0) or 0
+        return max(0, min(100, int(taken / init_days * 100)))
 
 def is_course_finished(med: dict) -> bool:
-    """Курс завершён если taken_doses >= total_doses."""
+    """Курс завершён если taken_doses >= course_days * doses_per_day."""
     cd = med.get("course_days") or 0
     if cd <= 0 or not med.get("is_started"):
         return False
-    times = med.get("times", {})
-    dpd   = 1
-    for t in times.values():
-        if isinstance(t, list) and len(t) > dpd:
-            dpd = len(t)
-    total_doses = cd * dpd
+    total_doses = cd * doses_per_day(med)
     taken = med.get("taken_doses", 0) or 0
     return taken >= total_doses
+
+def is_stock_empty(med: dict) -> bool:
+    """Запас закончился (total_mg < одной дозы = unit_mg)."""
+    unit_mg = med.get("unit_mg") or 0
+    total   = med.get("total_mg") or 0
+    if unit_mg <= 0:
+        return False
+    return total < unit_mg
 
 def format_schedule(times: dict) -> str:
     if not isinstance(times, dict) or not times:
@@ -233,51 +253,58 @@ def build_med_row(name: str, med: dict, chat_id: int) -> dict:
     form          = med.get("form", "tablets")
     cd            = med.get("course_days") or 0
     is_started    = med.get("is_started", False)
-    days_left     = calc_days_left_in_course(med)   # дней до конца КУРСА
-    stock_days    = calc_stock_days(med)             # дней по запасу
+    days_left     = calc_days_left_in_course(med)
+    stock_days    = calc_stock_days(med)
     progress      = calc_progress(med)
     rem_units     = calc_remaining_units(med)
     daily_units   = calc_daily_units(med)
     daily_mg      = med.get("daily_mg", 0)
+    unit_mg       = med.get("unit_mg", 0)
     unit_name     = get_unit_name(form)
     schedule      = format_schedule(med.get("times", {}))
     course_done   = is_course_finished(med)
+    stock_empty   = is_stock_empty(med)
+    # предупреждение: запас кончился, но курс ещё идёт
+    need_refill   = stock_empty and is_started and not course_done
 
     end_date         = None
     course_days_left = None
     is_enough        = True
 
-    if cd > 0 and is_started and med.get("start_date"):
-        start = _parse_dt(med["start_date"])
+    if cd > 0 and is_started:
+        course_days_left = days_left
+        is_enough        = stock_days >= course_days_left
+        # дата окончания курса по taken_doses
+        dpd = doses_per_day(med)
+        taken = med.get("taken_doses", 0) or 0
+        start = _parse_dt(med.get("start_date"))
         if start:
-            passed           = max(0, (get_now() - start).days)
-            course_days_left = max(0, cd - passed)
-            end_date         = (start + timedelta(days=cd)).strftime("%d.%m.%Y")
-            is_enough        = stock_days >= course_days_left
+            days_passed_real = taken / dpd if dpd > 0 else 0
+            end_date = (start + timedelta(days=cd)).strftime("%d.%m.%Y")
 
     return {
         "name":             name,
         "chat_id":          chat_id,
         "form":             form,
         "daily_mg":         daily_mg,
-        "unit_mg":          med.get("unit_mg", 0),
+        "unit_mg":          unit_mg,
         "total_mg":         med.get("total_mg", 0),
         "remaining_units":  round(rem_units, 2),
         "daily_units":      round(daily_units, 2),
         "unit_name":        unit_name,
-        # ← дней до конца КУРСА (для отображения "99 дн. ост.")
-        "days_left":        days_left,
-        # ← дней по запасу (для прогноза "хватит ли")
-        "stock_days":       stock_days,
-        "dose_line":        f"{daily_mg} мг/сут",   # ВСЕГДА в мг
+        "dose_line":        f"{daily_mg} мг/сут",
         "course_days":      cd,
         "is_started":       is_started,
         "progress":         progress,
         "taken_doses":      med.get("taken_doses", 0) or 0,
+        "days_left":        days_left,        # дней до конца КУРСА
+        "stock_days":       stock_days,       # дней до конца ЗАПАСА
         "is_enough":        is_enough,
         "end_date":         end_date,
         "course_days_left": course_days_left,
-        "course_done":      course_done,        # флаг завершения курса
+        "course_done":      course_done,
+        "need_refill":      need_refill,      # запас кончился, курс ещё идёт
+        "stock_empty":      stock_empty,
         "schedule":         schedule,
         "times":            med.get("times", {}),
     }
@@ -318,7 +345,7 @@ async def add_medicine(req: AddMedicineRequest):
             "total_mg":          total,
             "initial_units":     req.units,
             "course_days":       req.course_days if req.course_days > 0 else None,
-            "taken_doses":       0,      # счётчик нажатий «Выпил»
+            "taken_doses":       0,
             "created":           get_now().isoformat(),
             "is_started":        False,
             "start_date":        None,
@@ -331,14 +358,17 @@ async def add_medicine(req: AddMedicineRequest):
         if not _save(store):
             raise HTTPException(500, "Ошибка сохранения")
 
-        med   = store[chat_id][req_name]
-        days  = calc_days_left_in_course(med)
-        un    = get_unit_name(req.form)
-        rem   = round(calc_remaining_units(med), 1)
+        med  = store[chat_id][req_name]
+        un   = get_unit_name(req.form)
+        rem  = round(calc_remaining_units(med), 1)
+        dly  = round(calc_daily_units(med), 1)
+        days = calc_days_left_in_course(med)
 
         return {
             "success": True,
-            "message": f"✅ Лекарство успешно добавлено!\nЗапас: {rem} {un}. Расход: {req.daily_mg} мг/сут. Хватит на {days} дней.",
+            "message": (f"✅ Лекарство успешно добавлено!\n"
+                        f"Запас: {rem} {un}. Расход: {req.daily_mg} мг/сут ({dly} {un}/сут). "
+                        f"Хватит на {days} дней."),
             "name": req_name
         }
     except HTTPException:
@@ -399,10 +429,10 @@ async def start_course(req: StartCourseRequest):
         if req.med_name not in store[req.chat_id]:
             raise HTTPException(404, "Лекарство не найдено")
         med = store[req.chat_id][req.med_name]
-        med["is_started"]   = True
-        med["start_date"]   = get_now().isoformat()
-        med["taken_doses"]  = 0   # сброс при старте
-        med["notified"]     = False
+        med["is_started"]  = True
+        med["start_date"]  = get_now().isoformat()
+        med["taken_doses"] = 0
+        med["notified"]    = False
         if not _save(store):
             raise HTTPException(500, "Ошибка сохранения")
         return {"success": True, "message": f"▶️ Курс «{req.med_name}» начат!"}
@@ -415,30 +445,31 @@ async def start_course(req: StartCourseRequest):
 
 @app.post("/api/taken")
 async def mark_taken(req: TakenRequest):
+    """
+    Отмечает ОДИН приём (одна таблетка = unit_mg).
+    Вычитает unit_mg из total_mg.
+    Инкрементирует taken_doses.
+    Возвращает обновлённые поля + флаги course_done и need_refill.
+    """
     logger.info(f"POST /api/taken  {req.med_name}")
     try:
         store   = _load()
         updated = {}
         course_done = False
+        need_refill = False
 
         if req.chat_id in store and req.med_name in store[req.chat_id]:
             med = store[req.chat_id][req.med_name]
 
-            # вычитаем дозу из запаса
-            t_dict = med.get("times", {})
-            dc = 1
-            for t in t_dict.values():
-                if t:
-                    dc = max(dc, len(t))
-            per_dose = med["daily_mg"] / dc if dc > 0 else med["daily_mg"]
-            med["total_mg"]    = max(0, med["total_mg"] - per_dose)
-
-            # инкрементируем счётчик нажатий (для персистентного прогресса)
+            # вычитаем ОДНУ таблетку (unit_mg), а не суточную дозу
+            unit_mg = med.get("unit_mg") or med.get("daily_mg") or 1
+            med["total_mg"]    = max(0, (med.get("total_mg") or 0) - unit_mg)
             med["taken_doses"] = (med.get("taken_doses") or 0) + 1
 
             _save(store)
 
             course_done = is_course_finished(med)
+            need_refill = is_stock_empty(med) and med.get("is_started") and not course_done
 
             updated = {
                 "total_mg":        round(med["total_mg"], 4),
@@ -449,9 +480,17 @@ async def mark_taken(req: TakenRequest):
                 "progress":        calc_progress(med),
                 "taken_doses":     med["taken_doses"],
                 "course_done":     course_done,
+                "need_refill":     need_refill,
+                "stock_empty":     is_stock_empty(med),
             }
 
-        msg = "🎉 Курс завершён!" if course_done else "✅ Приём отмечен!"
+        if course_done:
+            msg = "🎉 Курс завершён!"
+        elif need_refill:
+            msg = "⚠️ Таблетки закончились! Не забудьте пополнить запас."
+        else:
+            msg = "✅ Приём отмечен!"
+
         return {"success": True, "message": msg, "updated": updated}
 
     except Exception as e:
