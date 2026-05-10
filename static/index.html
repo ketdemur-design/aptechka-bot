@@ -309,9 +309,11 @@ async function doTake(chatId, name, cardEl){
 
       if (cardEl) applyProgressToCard(cardEl, med, p, u);
 
-      // уведомление о завершении курса
+      // уведомления
       if (u.course_done) {
         showCourseFinishedBanner(name, cardEl);
+      } else if (u.need_refill) {
+        showRefillBanner(name, chatId, cardEl);
       } else {
         toast(d.message || '✅ Приём отмечен!');
       }
@@ -323,6 +325,29 @@ async function doTake(chatId, name, cardEl){
     console.error('doTake error:', e);
     toast('❌ Ошибка при отметке приёма', true);
   }
+}
+
+
+// Баннер «Пополните запас» — таблетки кончились, курс идёт
+function showRefillBanner(name, chatId, cardEl) {
+  document.querySelector('.toast')?.remove();
+  const t = document.createElement('div');
+  t.className = 'toast fixed bottom-28 left-1/2 -translate-x-1/2 z-50 px-6 py-4 rounded-2xl text-white font-bold shadow-2xl text-center';
+  t.style.cssText = 'background:linear-gradient(135deg,#f43f5e,#f97316);white-space:nowrap;font-size:14px;';
+  t.innerHTML = `💊 «${name}» закончились!<br><span style="font-size:12px;opacity:.9">Пополните запас чтобы продолжить курс</span>`;
+  document.body.appendChild(t);
+  // кнопка «Пополнить» прямо в баннере
+  const btn = document.createElement('button');
+  btn.textContent = '+ Пополнить';
+  btn.style.cssText = 'display:block;margin:8px auto 0;padding:4px 16px;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.5);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;';
+  btn.onclick = () => { t.remove(); doRefill(chatId, name); };
+  t.appendChild(btn);
+  setTimeout(() => {
+    t.style.transition = 'all .4s';
+    t.style.opacity = '0';
+    t.style.transform = 'translate(-50%,20px)';
+    setTimeout(() => t.remove(), 400);
+  }, 6000);
 }
 
 // Баннер «Курс завершён» поверх карточки
@@ -544,7 +569,7 @@ function renderMeds(){
           onmouseout="this.style.color='rgba(244,63,94,.55)';this.style.background=''">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 4V3c0-1 1-2 2-2h4c1 0 2 1 2 2v1"/></svg>
       </button>
-      <div class="days-left-badge px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${dl <= 7 ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">${dl} дн. ост.</div>
+      <div class="days-left-badge px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${dl <= 7 ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">${dl} дн. до конца${cd === 0 ? ' запаса' : ' курса'}</div>
       ${started ? `<div class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase flex items-center gap-1" style="background:rgba(16,185,129,.1);color:#10b981"><div class="w-1 h-1 rounded-full animate-pulse" style="background:#10b981"></div>КУРС НАЧАТ</div>` : ''}
     </div>
   </div>
@@ -576,6 +601,7 @@ function renderMeds(){
     </div>
 
     ${isCrit ? '<p class="text-[10px] font-bold mt-2 uppercase tracking-tighter text-right" style="color:#f43f5e">⚠ Запас почти исчерпан!</p>' : ''}
+    ${med.stock_empty && med.is_started && !med.course_done ? '<p class="text-[11px] font-black mt-2 uppercase tracking-tighter text-center py-2 rounded-xl" style="background:rgba(244,63,94,.12);color:#f43f5e">💊 Таблетки закончились — пополните запас!</p>' : ''}
     <div class="course-indicator mt-2 text-[11px] font-extrabold uppercase tracking-tight" style="color:${cColor}">${cInd}</div>
   </div>
 
@@ -923,7 +949,7 @@ function renderWizard(){
     // для drops/spray — спрашиваем в единицах, для остальных — в мг
     const isLiquid = (f === 'drops' || f === 'spray');
     const un = {'drops':'капель','spray':'впрыскиваний','liquid':'мл'}[f] || 'мг';
-    const qLabel = isLiquid ? `Сколько ${un} в сутки принимать?` : 'Сколько мг в сутки принимать?';
+    const qLabel = isLiquid ? `Сколько ${un} в сутки принимаете?` : 'Сколько мг. в сутки принимаете?';
     wc.innerHTML = `
       <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">${qLabel}</h3>
       <input id="wDaily" type="number" step="any" min="0.1" class="${INP}" style="background:var(--surface-hover);color:var(--text-primary)">
