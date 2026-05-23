@@ -17,8 +17,11 @@ from settings import APP_VERSION
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ══════════════════════════════════════════════════════
+#  КОНФИГУРАЦИЯ
+# ══════════════════════════════════════════════════════
 TZ_MOSCOW  = pytz.timezone('Europe/Moscow')
-DATA_FILE  = Path("meds_data.json")
+DATA_FILE  = Path(os.getenv("DATA_FILE", "meds_data.json"))
 STATIC_DIR = Path(__file__).parent / "static"
 
 logger.info(f"📁 server.py  данные: {DATA_FILE.absolute()}")
@@ -32,19 +35,21 @@ app.add_middleware(
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# ══ МОДЕЛИ ══
+# ══════════════════════════════════════════════════════
+#  МОДЕЛИ
+# ══════════════════════════════════════════════════════
 class AddMedicineRequest(BaseModel):
     chat_id:     Optional[int] = 0
     name:        str
     form:        str
     unit_mg:     float
     units:       float
-    daily_mg:    float   # мг/сут — напрямую от пользователя
+    daily_mg:    float
     course_days: int = 0
 
 class UpdateMedicineRequest(BaseModel):
-    chat_id:  int
-    med_name: str
+    chat_id:   int
+    med_name:  str
     daily_mg:  Optional[float] = None
     add_stock: Optional[float] = None
 
@@ -56,7 +61,9 @@ class TakenRequest(BaseModel):
     chat_id:  int
     med_name: str
 
-# ══ ДАННЫЕ ══
+# ══════════════════════════════════════════════════════
+#  РАБОТА С ДАННЫМИ
+# ══════════════════════════════════════════════════════
 def get_now() -> datetime:
     return datetime.now(TZ_MOSCOW)
 
@@ -71,6 +78,7 @@ def _load() -> dict:
         return {}
 
 def _save(store: dict) -> bool:
+    """БАГ №1 ИСПРАВЛЕН: запись в тот же DATA_FILE через tmp → replace."""
     try:
         tmp = DATA_FILE.with_suffix(".tmp")
         tmp.write_text(
@@ -94,28 +102,32 @@ def _parse_dt(val) -> Optional[datetime]:
             return None
     return None
 
-# ══ РАСЧЁТЫ ══
-
+# ══════════════════════════════════════════════════════
+#  РАСЧЁТНЫЕ ФУНКЦИИ
+# ══════════════════════════════════════════════════════
 def calc_total_from_units(form: str, unit_mg: float, units: float) -> float:
-    """Количество единиц × размер единицы → внутренний total_mg."""
+    """
+    БАГ №3 ИСПРАВЛЕН: liquid = unit_mg * units (простое умножение).
+    drops:  1 капля = 0.05 мл → (мл_флакона / 0.05) * кол-во_флаконов
+    spray:  1 впрыск = 0.1 мл → (мл_флакона / 0.10) * кол-во_флаконов
+    liquid: мл_бутылки * кол-во_бутылок
+    прочие: мг_таблетки * кол-во_таблеток
+    """
     if form == "drops":
         return (unit_mg / 0.05) * units
     if form == "spray":
         return (unit_mg / 0.10) * units
-    return unit_mg * units
+    return unit_mg * units  # liquid, tablets, capsules, sachet
 
 def get_unit_name(form: str) -> str:
     return {
-        "tablets": "табл.", "capsules": "капс.",
-        "liquid":  "мл",    "drops":    "кап.",
-        "spray":   "впрыск.", "sachet":  "саше",
+        "tablets":  "табл.", "capsules": "капс.",
+        "liquid":   "мл",    "drops":    "кап.",
+        "spray":    "впрыск.", "sachet": "саше",
     }.get(form, "ед.")
 
 def calc_remaining_units(med: dict) -> float:
-    """
-    Остаток в штуках: total_mg / unit_mg.
-    Одна таблетка = unit_mg мг, поэтому остаток в штуках = total_mg / unit_mg.
-    """
+    """Остаток в штуках: total_mg / unit_mg."""
     form    = med.get("form", "tablets")
     total   = med.get("total_mg", 0) or 0
     unit_mg = med.get("unit_mg",  0) or 0
@@ -124,10 +136,7 @@ def calc_remaining_units(med: dict) -> float:
     return (total / unit_mg) if unit_mg > 0 else 0
 
 def calc_daily_units(med: dict) -> float:
-    """
-    Суточный расход в штуках: daily_mg / unit_mg.
-    Пример: 200 мг/сут при таблетке 100 мг = 2 табл./сут.
-    """
+    """Суточный расход в штуках: daily_mg / unit_mg."""
     form     = med.get("form", "tablets")
     daily_mg = med.get("daily_mg", 0) or 0
     unit_mg  = med.get("unit_mg",  0) or 0
@@ -137,16 +146,17 @@ def calc_daily_units(med: dict) -> float:
 
 def doses_per_day(med: dict) -> int:
     """
-    Количество приёмов в сутки.
-    Считается как daily_mg / unit_mg (сколько таблеток в сутки).
-    Если расписание не задано — используем это значение.
-    Минимум 1.
-    Пример: 200 мг/сут, таблетка 100 мг → 2 приёма в сутки.
+    Количество приёмов в сутки = daily_mg / unit_mg.
+    Пример: 200 мг/сут при таблетке 100 мг → 2 приёма.
     """
-    dpd_calc = calc_daily_units(med)
-    dpd = max(1, round(dpd_calc)) if dpd_calc > 0 else 1
-
-    # если в расписании явно задано больше — берём из расписания
+    form    = med.get("form", "tablets")
+    daily   = med.get("daily_mg", 0) or 0
+    unit_mg = med.get("unit_mg", 0) or 0
+    if form in ("drops", "spray"):
+        return max(1, round(daily)) if daily > 0 else 1
+    if unit_mg <= 0:
+        return 1
+    dpd = max(1, round(daily / unit_mg))
     times = med.get("times", {})
     for t in times.values():
         if isinstance(t, list) and len(t) > dpd:
@@ -155,21 +165,14 @@ def doses_per_day(med: dict) -> int:
 
 def calc_days_left_in_course(med: dict) -> int:
     """
-    Дней до конца КУРСА.
-
-    Курс N дней:
-      Считаем по taken_doses — каждые doses_per_day нажатий = 1 день.
-      days_passed = taken_doses / doses_per_day
-      days_left   = course_days - days_passed
-
-    Пожизненно:
-      Дней по запасу = total_mg / daily_mg.
+    Дней до конца КУРСА по taken_doses.
+    Пожизненно: дней до исчерпания запаса.
     """
     cd = med.get("course_days") or 0
     if cd > 0:
         taken  = med.get("taken_doses", 0) or 0
         dpd    = doses_per_day(med)
-        passed = taken / dpd          # дней прошло (дробное)
+        passed = taken / dpd
         return max(0, int(cd - passed))
     else:
         dmg = med.get("daily_mg") or 0
@@ -186,17 +189,11 @@ def calc_stock_days(med: dict) -> int:
 
 def calc_progress(med: dict) -> int:
     """
-    Прогресс шкалы (%).
-
-    Курс N дней:
-      progress = taken_doses / (course_days * doses_per_day) * 100
-      Персистентно — не сбрасывается при перезагрузке.
-
-    Пожизненно:
-      progress = % израсходованного от initial_units.
+    Прогресс (%):
+    Курс:       taken_doses / (course_days * doses_per_day) * 100
+    Пожизненно: % израсходованного от initial_units
     """
     cd = med.get("course_days") or 0
-
     if cd > 0:
         taken       = med.get("taken_doses", 0) or 0
         dpd         = doses_per_day(med)
@@ -204,7 +201,6 @@ def calc_progress(med: dict) -> int:
         if total_doses <= 0:
             return 0
         return max(0, min(100, int(taken / total_doses * 100)))
-
     else:
         init    = med.get("initial_units")
         unit_mg = med.get("unit_mg") or 0
@@ -212,19 +208,17 @@ def calc_progress(med: dict) -> int:
         if init and init > 0 and unit_mg > 0:
             rem = total / unit_mg
             return max(0, min(100, int((1 - rem / init) * 100)))
-        # fallback по запасу
         dmg = med.get("daily_mg") or 0
         if not dmg:
             return 0
-        stock = calc_stock_days(med)
-        init_days = stock + (med.get("taken_doses", 0) or 0)
-        if init_days <= 0:
+        stock  = calc_stock_days(med)
+        taken  = med.get("taken_doses", 0) or 0
+        horizon = stock + taken
+        if horizon <= 0:
             return 0
-        taken = med.get("taken_doses", 0) or 0
-        return max(0, min(100, int(taken / init_days * 100)))
+        return max(0, min(100, int(taken / horizon * 100)))
 
 def is_course_finished(med: dict) -> bool:
-    """Курс завершён если taken_doses >= course_days * doses_per_day."""
     cd = med.get("course_days") or 0
     if cd <= 0 or not med.get("is_started"):
         return False
@@ -233,7 +227,6 @@ def is_course_finished(med: dict) -> bool:
     return taken >= total_doses
 
 def is_stock_empty(med: dict) -> bool:
-    """Запас закончился (total_mg < одной дозы = unit_mg)."""
     unit_mg = med.get("unit_mg") or 0
     total   = med.get("total_mg") or 0
     if unit_mg <= 0:
@@ -250,22 +243,21 @@ def format_schedule(times: dict) -> str:
     return " | ".join(parts) if parts else "не указано"
 
 def build_med_row(name: str, med: dict, chat_id: int) -> dict:
-    form          = med.get("form", "tablets")
-    cd            = med.get("course_days") or 0
-    is_started    = med.get("is_started", False)
-    days_left     = calc_days_left_in_course(med)
-    stock_days    = calc_stock_days(med)
-    progress      = calc_progress(med)
-    rem_units     = calc_remaining_units(med)
-    daily_units   = calc_daily_units(med)
-    daily_mg      = med.get("daily_mg", 0)
-    unit_mg       = med.get("unit_mg", 0)
-    unit_name     = get_unit_name(form)
-    schedule      = format_schedule(med.get("times", {}))
-    course_done   = is_course_finished(med)
-    stock_empty   = is_stock_empty(med)
-    # предупреждение: запас кончился, но курс ещё идёт
-    need_refill   = stock_empty and is_started and not course_done
+    form             = med.get("form", "tablets")
+    cd               = med.get("course_days") or 0
+    is_started       = med.get("is_started", False)
+    days_left        = calc_days_left_in_course(med)
+    stock_days       = calc_stock_days(med)
+    progress         = calc_progress(med)
+    rem_units        = calc_remaining_units(med)
+    daily_units      = calc_daily_units(med)
+    daily_mg         = med.get("daily_mg", 0)
+    unit_mg          = med.get("unit_mg", 0)
+    unit_name        = get_unit_name(form)
+    schedule         = format_schedule(med.get("times", {}))
+    course_done      = is_course_finished(med)
+    stock_empty      = is_stock_empty(med)
+    need_refill      = stock_empty and is_started and not course_done
 
     end_date         = None
     course_days_left = None
@@ -274,12 +266,8 @@ def build_med_row(name: str, med: dict, chat_id: int) -> dict:
     if cd > 0 and is_started:
         course_days_left = days_left
         is_enough        = stock_days >= course_days_left
-        # дата окончания курса по taken_doses
-        dpd = doses_per_day(med)
-        taken = med.get("taken_doses", 0) or 0
         start = _parse_dt(med.get("start_date"))
         if start:
-            days_passed_real = taken / dpd if dpd > 0 else 0
             end_date = (start + timedelta(days=cd)).strftime("%d.%m.%Y")
 
     return {
@@ -297,20 +285,21 @@ def build_med_row(name: str, med: dict, chat_id: int) -> dict:
         "is_started":       is_started,
         "progress":         progress,
         "taken_doses":      med.get("taken_doses", 0) or 0,
-        "days_left":        days_left,        # дней до конца КУРСА
-        "stock_days":       stock_days,       # дней до конца ЗАПАСА
+        "days_left":        days_left,
+        "stock_days":       stock_days,
         "is_enough":        is_enough,
         "end_date":         end_date,
         "course_days_left": course_days_left,
         "course_done":      course_done,
-        "need_refill":      need_refill,      # запас кончился, курс ещё идёт
+        "need_refill":      need_refill,
         "stock_empty":      stock_empty,
         "schedule":         schedule,
         "times":            med.get("times", {}),
     }
 
-# ══ ЭНДПОИНТЫ ══
-
+# ══════════════════════════════════════════════════════
+#  API ЭНДПОИНТЫ
+# ══════════════════════════════════════════════════════
 @app.get("/api/meds")
 async def get_meds(chat_id: Optional[int] = None):
     logger.info("GET /api/meds")
@@ -328,14 +317,15 @@ async def get_meds(chat_id: Optional[int] = None):
 async def add_medicine(req: AddMedicineRequest):
     logger.info(f"POST /api/meds/add  name={req.name}")
     try:
-        store   = _load()
-        chat_id = req.chat_id or next(iter(store), 12345)
+        store    = _load()
+        chat_id  = req.chat_id or next(iter(store), 12345)
         req_name = req.name.strip()
         if not req_name:
             raise HTTPException(400, "Название не может быть пустым")
         if req_name in store.get(chat_id, {}):
             raise HTTPException(400, "Лекарство с таким названием уже существует")
 
+        # БАГ №3 ИСПРАВЛЕН: calc_total_from_units правильно считает liquid
         total = calc_total_from_units(req.form, req.unit_mg, req.units)
 
         store.setdefault(chat_id, {})[req_name] = {
@@ -367,7 +357,7 @@ async def add_medicine(req: AddMedicineRequest):
         return {
             "success": True,
             "message": (f"✅ Лекарство успешно добавлено!\n"
-                        f"Запас: {rem} {un}. Расход: {req.daily_mg} мг/сут ({dly} {un}/сут). "
+                        f"Запас: {rem} {un}. Расход: {req.daily_mg} мг/сут. "
                         f"Хватит на {days} дней."),
             "name": req_name
         }
@@ -389,7 +379,7 @@ async def update_medicine(req: UpdateMedicineRequest):
             raise HTTPException(404, "Лекарство не найдено")
 
         med = store[req.chat_id][req.med_name]
-        un  = get_unit_name(med.get("form", "tablets"))
+        un  = get_unit_name(med.get("form","tablets"))
 
         if req.daily_mg is not None:
             med["daily_mg"] = req.daily_mg
@@ -400,7 +390,7 @@ async def update_medicine(req: UpdateMedicineRequest):
 
         if req.add_stock is not None:
             unit_mg = med.get("unit_mg", 1)
-            added   = calc_total_from_units(med.get("form", "tablets"), unit_mg, req.add_stock)
+            added   = calc_total_from_units(med.get("form","tablets"), unit_mg, req.add_stock)
             med["total_mg"] += added
             med["notified"]  = False
             if not med.get("course_days"):
@@ -446,26 +436,26 @@ async def start_course(req: StartCourseRequest):
 @app.post("/api/taken")
 async def mark_taken(req: TakenRequest):
     """
-    Отмечает ОДИН приём (одна таблетка = unit_mg).
-    Вычитает unit_mg из total_mg.
-    Инкрементирует taken_doses.
-    Возвращает обновлённые поля + флаги course_done и need_refill.
+    БАГ №1 ИСПРАВЛЕН: данные записываются в тот же DATA_FILE.
+    Вычитает одну таблетку (unit_mg), инкрементирует taken_doses.
+    Возвращает updated-поля для мгновенного обновления шкалы.
     """
     logger.info(f"POST /api/taken  {req.med_name}")
     try:
-        store   = _load()
-        updated = {}
+        store       = _load()
+        updated     = {}
         course_done = False
         need_refill = False
 
         if req.chat_id in store and req.med_name in store[req.chat_id]:
             med = store[req.chat_id][req.med_name]
 
-            # вычитаем ОДНУ таблетку (unit_mg), а не суточную дозу
+            # вычитаем одну таблетку (unit_mg), а не суточную дозу
             unit_mg = med.get("unit_mg") or med.get("daily_mg") or 1
             med["total_mg"]    = max(0, (med.get("total_mg") or 0) - unit_mg)
             med["taken_doses"] = (med.get("taken_doses") or 0) + 1
 
+            # БАГ №1: _save записывает в тот же DATA_FILE что и бот
             _save(store)
 
             course_done = is_course_finished(med)
@@ -487,7 +477,7 @@ async def mark_taken(req: TakenRequest):
         if course_done:
             msg = "🎉 Курс завершён!"
         elif need_refill:
-            msg = "⚠️ Таблетки закончились! Не забудьте пополнить запас."
+            msg = "⚠️ Таблетки закончились! Пополните запас."
         else:
             msg = "✅ Приём отмечен!"
 
@@ -521,18 +511,20 @@ async def get_version():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": APP_VERSION,
-            "data_file": str(DATA_FILE), "exists": DATA_FILE.exists()}
+    return {"status":"ok","version":APP_VERSION,"data_file":str(DATA_FILE),"exists":DATA_FILE.exists()}
 
 @app.get("/test")
 async def test():
-    return {"message": "Server is working!", "version": APP_VERSION}
+    return {"message":"Server is working!","version":APP_VERSION}
 
 @app.get("/")
 async def root():
     p = STATIC_DIR / "index.html"
-    return FileResponse(p) if p.exists() else {"status": "ok", "error": "index.html not found"}
+    return FileResponse(p) if p.exists() else {"status":"ok","error":"index.html not found"}
 
+# ══════════════════════════════════════════════════════
+#  ЗАПУСК
+# ══════════════════════════════════════════════════════
 def run_server():
     port = int(os.getenv("PORT", 3000))
     host = os.getenv("HOST", "0.0.0.0")
