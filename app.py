@@ -124,7 +124,7 @@ def calc_total_from_units(form: str, unit_mg: float, units: float) -> float:
     БАГ №3 ИСПРАВЛЕН: liquid = unit_mg * units (без деления).
     drops:  1 капля = 0.05 мл → total_drops = (unit_mg / 0.05) * units
     spray:  1 впрыск = 0.1 мл → total_sprays = (unit_mg / 0.1) * units
-    liquid: unit_mg = мл в бутылке → total_ml = unit_mg * units
+    liquid: unit_mg = мл в флаконе → total_ml = unit_mg * units
     прочие: unit_mg = мг в таблетке → total_mg = unit_mg * units
     """
     if form == "drops":
@@ -268,7 +268,7 @@ DAYS_MAP = {
 FORM_LABELS = {
     "tablets":  ("таблетке","таблеток"),
     "capsules": ("капсуле","капсул"),
-    "liquid":   ("бутылке","бутылок"),
+    "liquid":   ("флаконе","флаконов"),
     "drops":    ("флаконе","флаконов"),
     "spray":    ("флаконе","флаконов"),
     "sachet":   ("саше","саше"),
@@ -472,8 +472,15 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg = f"✅ Сохранено для {DAYS_MAP.get(day_key,day_key)}"
             await save_data_store_async()
             user_states.pop(cid, None)
+            # Формируем итоговое расписание для отображения
+            all_times = []
+            for dk, tv in med_data["times"].items():
+                if tv:
+                    day_label = DAYS_MAP.get(dk, dk)
+                    all_times.append(f"{day_label}: {', '.join(tv)}")
+            schedule_summary = "\n".join(all_times) if all_times else "не установлено"
             await update.message.reply_text(
-                f"{msg}\nНастройте следующий день или вернитесь в меню:",
+                f"{msg}\n\n🔔 Текущее расписание:\n{schedule_summary}\n\nНастройте следующий день или вернитесь в меню:",
                 reply_markup=days_menu(med_name, med_data["times"])
             )
         except Exception:
@@ -546,13 +553,14 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompts = {
             "drops":  "Объём флакона (мл)?",
             "spray":  "Сколько мл в одном флаконе?",
-            "liquid": "Сколько мл в одной единице?",
+            "liquid": "Сколько мл. в одном флаконе?",
         }
         if form in prompts:
             await q.message.reply_text(prompts[form])
         else:
             singular, _ = FORM_LABELS.get(form,("единице","единиц"))
             await q.message.reply_text(f"Сколько мг в одной {singular}?")
+
         return
 
     if data.startswith("course_"):
