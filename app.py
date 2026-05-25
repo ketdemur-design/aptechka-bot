@@ -411,6 +411,10 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state["flow"] == "add":
         step = state["step"]
+        # Убеждаемся что d — это именно state["data"] (не копия)
+        if "data" not in state:
+            state["data"] = {}
+        d = state["data"]
 
         if step == "name":
             d["name"] = text
@@ -720,24 +724,50 @@ async def _save_medicine(src, cid: int):
     }
 
     await save_data_store_async()
+    print(f"✅ Сохранено лекарство '{d['name']}' для chat_id={cid}, файл={DATA_FILE}")
     med  = data_store[cid][d["name"]]
     days = calc_days_left_in_course(med)
     un   = get_unit_label(form)
     rem  = round(calc_remaining_units(med), 1)
+    # Для drops/spray суточная доза в единицах, для остальных в мг
+    dose_display = f"{daily_mg} {'мл/сут' if form == 'liquid' else 'мг/сут' if form not in ('drops','spray') else (get_unit_label(form) + '/сут')}"
 
     msg = (
         f"✅ Лекарство *{d['name']}* успешно добавлено!\n\n"
-        f"Расход: {daily_mg} мг/сут\n"
+        f"Расход: {dose_display}\n"
         f"Запас: {rem} {un}\n"
         f"Хватит на: {days} дней\n\n"
         f"⚠️ Нажмите «▶️ Начать курс» для старта отсчёта."
     )
 
-    if hasattr(src, "reply_text"):
-        await src.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
-    else:
-        await src.edit_message_text(msg, parse_mode="Markdown")
-        await src.message.reply_text("Главное меню:", reply_markup=main_menu())
+    # Определяем объект для отправки сообщения
+    # src может быть Message или CallbackQuery
+    try:
+        if hasattr(src, "reply_text"):
+            # src — это Message — используем напрямую
+            await src.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
+        elif hasattr(src, "message") and hasattr(src.message, "reply_text"):
+            # src — это CallbackQuery — используем src.message
+            try:
+                # Сначала попробуем отредактировать исходное сообщение
+                await src.edit_message_reply_markup(reply_markup=None)
+            except Exception:
+                pass  # Если не получилось — не страшно
+            await src.message.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
+        else:
+            print(f"_save_medicine: неизвестный тип src: {type(src)}")
+    except Exception as e:
+        print(f"_save_medicine reply error: {e}")
+        # Аварийный вариант — через bot напрямую
+        if bot_application:
+            try:
+                await bot_application.bot.send_message(
+                    chat_id=cid, text=msg,
+                    parse_mode="Markdown",
+                    reply_markup=main_menu()
+                )
+            except Exception as e2:
+                print(f"_save_medicine bot.send_message error: {e2}")
 
     user_states.pop(cid, None)
 
