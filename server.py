@@ -392,6 +392,8 @@ async def add_medicine(req: AddMedicineRequest):
         if not _save(store):
             raise HTTPException(500, "Ошибка сохранения")
 
+        await notify_bot_medicine_added(chat_id, req_name)
+
         med  = store[chat_id][req_name]
         un   = get_unit_name(req.form)
         rem  = round(calc_remaining_units(med), 1)
