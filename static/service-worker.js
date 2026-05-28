@@ -1,4 +1,4 @@
-const CACHE_NAME = 'medbot-v1';
+const CACHE_NAME = 'medbot-v2';
 const STATIC_ASSETS = ['/', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -10,34 +10,30 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // API calls — network only, never cache
-  if (url.pathname.startsWith('/api/')) {
+  if (event.request.method !== 'GET') {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // Static assets — cache first, then network
   event.respondWith(
-    caches.match(event.request).then(
-      (cached) => cached || fetch(event.request).then((resp) => {
-        const clone = resp.clone();
+    fetch(event.request)
+      .then((response) => {
+        const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return resp;
+        return response;
       })
-    )
+      .catch(() => caches.match(event.request))
   );
 });
-
 
 self.addEventListener('push', function(event) {
   const data = event.data ? event.data.json() : { title: 'Напоминание', body: 'Время приёма лекарства' };
