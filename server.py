@@ -591,12 +591,12 @@ async def test():
 @app.get("/")
 async def root():
     p = STATIC_DIR / "index.html"
-    return FileResponse(p) if p.exists() else {"status":"ok","error":"index.html not found"}
+    return FileResponse(p, media_type='text/html', headers={'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0'}) if p.exists() else {"status":"ok","error":"index.html not found"}
 
 @app.get("/service-worker.js")
 async def service_worker():
     p = STATIC_DIR / "service-worker.js"
-    return FileResponse(p) if p.exists() else {"status":"ok","error":"service-worker.js not found"}
+    return FileResponse(p, media_type='application/javascript', headers={'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0','Service-Worker-Allowed':'/'}) if p.exists() else {"status":"ok","error":"service-worker.js not found"}
 
 
 VAPID_PRIVATE_KEY = "sHaxRrXHj95RPhQh0hXgRasfwgIYaGuybHJAVzdzAgk"
@@ -1233,12 +1233,12 @@ async def test():
 @app.get("/")
 async def root():
     p = STATIC_DIR / "index.html"
-    return FileResponse(p) if p.exists() else {"status":"ok","error":"index.html not found"}
+    return FileResponse(p, media_type='text/html', headers={'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0'}) if p.exists() else {"status":"ok","error":"index.html not found"}
 
 @app.get("/service-worker.js")
 async def service_worker():
     p = STATIC_DIR / "service-worker.js"
-    return FileResponse(p) if p.exists() else {"status":"ok","error":"service-worker.js not found"}
+    return FileResponse(p, media_type='application/javascript', headers={'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0','Service-Worker-Allowed':'/'}) if p.exists() else {"status":"ok","error":"service-worker.js not found"}
 
 
 VAPID_PRIVATE_KEY = "sHaxRrXHj95RPhQh0hXgRasfwgIYaGuybHJAVzdzAgk"

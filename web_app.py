@@ -261,12 +261,13 @@ def manifest():
 @app.get("/service-worker.js")
 def sw():
     return FileResponse(str(STATIC_DIR / "service-worker.js"),
-                        media_type="application/javascript")
+                        media_type="application/javascript",
+                        headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0", "Service-Worker-Allowed":"/"})
 
 
 @app.get("/")
 def index():
-    return FileResponse(str(STATIC_DIR / "index.html"))
+    return FileResponse(str(STATIC_DIR / "index.html"), media_type="text/html", headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0"})
 
 
 # ── Точка входа ───────────────────────────────────────────────────────────────
@@ -540,12 +541,12 @@ def manifest():
 
 @app.get("/service-worker.js")
 def sw():
-    return FileResponse(str(STATIC_DIR / "service-worker.js"), media_type="application/javascript")
+    return FileResponse(str(STATIC_DIR / "service-worker.js"), media_type="application/javascript", headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0", "Service-Worker-Allowed":"/"})
 
 
 @app.get("/")
 def index():
-    return FileResponse(str(STATIC_DIR / "index.html"))
+    return FileResponse(str(STATIC_DIR / "index.html"), media_type="text/html", headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0"})
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -998,7 +999,7 @@ def manifest():
 def sw():
     sw_path = STATIC_DIR / "service-worker.js"
     if sw_path.exists():
-        return FileResponse(str(sw_path), media_type="application/javascript")
+        return FileResponse(str(sw_path), media_type="application/javascript", headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0", "Service-Worker-Allowed":"/"})
     return JSONResponse({}, status_code=404)
 
 
@@ -1006,7 +1007,7 @@ def sw():
 def index():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
-        return FileResponse(str(index_path))
+        return FileResponse(str(index_path), media_type="text/html", headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0"})
     return JSONResponse({"error": "index.html not found"}, status_code=404)
 
 

@@ -116,10 +116,49 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
-async function initPushNotifications() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+async function registerFreshServiceWorker() {
+  if (!('serviceWorker' in navigator)) return null;
 
-  const registration = await navigator.serviceWorker.register('/static/service-worker.js');
+  let refreshed = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshed || sessionStorage.getItem('swReloadedForFreshDesign') === '1') return;
+    refreshed = true;
+    sessionStorage.setItem('swReloadedForFreshDesign', '1');
+    window.location.reload();
+  });
+
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(registrations.map((registration) => {
+    const scopePath = new URL(registration.scope).pathname;
+    if (scopePath !== '/') return registration.unregister();
+    return Promise.resolve();
+  }));
+
+  const registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/', updateViaCache: 'none' });
+
+  if (registration.waiting) {
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  }
+
+  registration.addEventListener('updatefound', () => {
+    const worker = registration.installing;
+    if (!worker) return;
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+        worker.postMessage({ type: 'SKIP_WAITING' });
+      }
+    });
+  });
+
+  registration.update().catch((error) => console.warn('Service worker update error:', error));
+  return registration;
+}
+
+async function initPushNotifications() {
+  if (!('serviceWorker' in navigator)) return;
+
+  const registration = await registerFreshServiceWorker();
+  if (!registration || !('PushManager' in window) || !('Notification' in window)) return;
   let permission = Notification.permission;
 
   if (permission === 'default') {
