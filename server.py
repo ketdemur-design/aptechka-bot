@@ -11,6 +11,7 @@ from typing import Optional
 import uvicorn
 import pytz
 import logging
+from pywebpush import webpush, WebPushException
 
 from settings import APP_VERSION
 
@@ -61,6 +62,11 @@ class TakenRequest(BaseModel):
     chat_id:  int
     med_name: str
 
+class PushSubscriptionRequest(BaseModel):
+    endpoint: str
+    keys: dict
+
+
 # ══════════════════════════════════════════════════════
 #  РАБОТА С ДАННЫМИ
 # ══════════════════════════════════════════════════════
@@ -72,7 +78,10 @@ def _load() -> dict:
         return {}
     try:
         raw = DATA_FILE.read_text(encoding="utf-8").strip()
-        return {int(k): v for k, v in json.loads(raw).items()} if raw else {}
+        if not raw:
+            return {}
+        parsed = json.loads(raw)
+        return {int(k): v for k, v in parsed.items() if str(k).isdigit()} | {k: v for k, v in parsed.items() if not str(k).isdigit()}
     except Exception as e:
         logger.error(f"load error: {e}")
         return {}
@@ -531,6 +540,82 @@ async def root():
     p = STATIC_DIR / "index.html"
     return FileResponse(p) if p.exists() else {"status":"ok","error":"index.html not found"}
 
+
+VAPID_PRIVATE_KEY = "sHaxRrXHj95RPhQh0hXgRasfwgIYaGuybHJAVzdzAgk"
+VAPID_PUBLIC_KEY = "BBqYJditjsv4ZXeaQvjX4irpgLjYdBxovGtAfjKMEfAmlZRy5LdQVPk6i755jyCUjvrB2r0oEX-Mhxx8Mes7NFI"
+VAPID_CLAIMS = {"sub": "mailto:admin@example.com"}
+
+def _send_web_push(subscription: dict, title: str, body: str) -> bool:
+    try:
+        webpush(
+            subscription_info=subscription,
+            data=json.dumps({"title": title, "body": body}, ensure_ascii=False),
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims=VAPID_CLAIMS,
+        )
+        return True
+    except WebPushException as e:
+        logger.warning(f"push send failed: {e}")
+        return False
+
+def send_push_for_due_medicines() -> int:
+    now = get_now()
+    now_hhmm = now.strftime("%H:%M")
+    weekday = str(now.weekday())
+    day_key = now.strftime("%Y-%m-%d")
+    sent = 0
+
+    store = _load()
+    subscriptions = store.get("_push_subscriptions", []) if isinstance(store, dict) else []
+    if not subscriptions:
+        return 0
+
+    for chat_id, meds in store.items():
+        if isinstance(chat_id, str):
+            continue
+        for med_name, med in meds.items():
+            times = med.get("times", {})
+            today_times = []
+            if isinstance(times.get("Everyday"), list):
+                today_times.extend(times.get("Everyday", []))
+            if isinstance(times.get(weekday), list):
+                today_times.extend(times.get(weekday, []))
+
+            if now_hhmm not in today_times:
+                continue
+
+            reminder_key = f"{day_key}:{now_hhmm}"
+            if med.get("last_push_key") == reminder_key:
+                continue
+
+            title = "💊 Напоминание о приёме"
+            body = f"Пора принять: {med_name}"
+            for sub in subscriptions:
+                if _send_web_push(sub, title, body):
+                    sent += 1
+
+            med["last_push_key"] = reminder_key
+
+    _save(store)
+    return sent
+
+@app.post("/api/subscribe")
+async def subscribe_push(subscription: PushSubscriptionRequest):
+    store = _load()
+    subs = store.get("_push_subscriptions", [])
+    if not any(item.get("endpoint") == subscription.endpoint for item in subs):
+        subs.append(subscription.model_dump())
+    store["_push_subscriptions"] = subs
+    if not _save(store):
+        raise HTTPException(500, "Ошибка сохранения push-подписки")
+    return {"success": True, "message": "Push-подписка сохранена", "public_key": VAPID_PUBLIC_KEY}
+
+@app.post("/api/push/check")
+async def trigger_push_check():
+    sent = send_push_for_due_medicines()
+    return {"success": True, "sent": sent}
+
+
 # ══════════════════════════════════════════════════════
 #  ЗАПУСК
 # ══════════════════════════════════════════════════════
@@ -560,6 +645,7 @@ from typing import Optional
 import uvicorn
 import pytz
 import logging
+from pywebpush import webpush, WebPushException
 
 from settings import APP_VERSION
 
@@ -610,6 +696,11 @@ class TakenRequest(BaseModel):
     chat_id:  int
     med_name: str
 
+class PushSubscriptionRequest(BaseModel):
+    endpoint: str
+    keys: dict
+
+
 # ══════════════════════════════════════════════════════
 #  РАБОТА С ДАННЫМИ
 # ══════════════════════════════════════════════════════
@@ -621,7 +712,10 @@ def _load() -> dict:
         return {}
     try:
         raw = DATA_FILE.read_text(encoding="utf-8").strip()
-        return {int(k): v for k, v in json.loads(raw).items()} if raw else {}
+        if not raw:
+            return {}
+        parsed = json.loads(raw)
+        return {int(k): v for k, v in parsed.items() if str(k).isdigit()} | {k: v for k, v in parsed.items() if not str(k).isdigit()}
     except Exception as e:
         logger.error(f"load error: {e}")
         return {}
@@ -1070,6 +1164,82 @@ async def test():
 async def root():
     p = STATIC_DIR / "index.html"
     return FileResponse(p) if p.exists() else {"status":"ok","error":"index.html not found"}
+
+
+VAPID_PRIVATE_KEY = "sHaxRrXHj95RPhQh0hXgRasfwgIYaGuybHJAVzdzAgk"
+VAPID_PUBLIC_KEY = "BBqYJditjsv4ZXeaQvjX4irpgLjYdBxovGtAfjKMEfAmlZRy5LdQVPk6i755jyCUjvrB2r0oEX-Mhxx8Mes7NFI"
+VAPID_CLAIMS = {"sub": "mailto:admin@example.com"}
+
+def _send_web_push(subscription: dict, title: str, body: str) -> bool:
+    try:
+        webpush(
+            subscription_info=subscription,
+            data=json.dumps({"title": title, "body": body}, ensure_ascii=False),
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims=VAPID_CLAIMS,
+        )
+        return True
+    except WebPushException as e:
+        logger.warning(f"push send failed: {e}")
+        return False
+
+def send_push_for_due_medicines() -> int:
+    now = get_now()
+    now_hhmm = now.strftime("%H:%M")
+    weekday = str(now.weekday())
+    day_key = now.strftime("%Y-%m-%d")
+    sent = 0
+
+    store = _load()
+    subscriptions = store.get("_push_subscriptions", []) if isinstance(store, dict) else []
+    if not subscriptions:
+        return 0
+
+    for chat_id, meds in store.items():
+        if isinstance(chat_id, str):
+            continue
+        for med_name, med in meds.items():
+            times = med.get("times", {})
+            today_times = []
+            if isinstance(times.get("Everyday"), list):
+                today_times.extend(times.get("Everyday", []))
+            if isinstance(times.get(weekday), list):
+                today_times.extend(times.get(weekday, []))
+
+            if now_hhmm not in today_times:
+                continue
+
+            reminder_key = f"{day_key}:{now_hhmm}"
+            if med.get("last_push_key") == reminder_key:
+                continue
+
+            title = "💊 Напоминание о приёме"
+            body = f"Пора принять: {med_name}"
+            for sub in subscriptions:
+                if _send_web_push(sub, title, body):
+                    sent += 1
+
+            med["last_push_key"] = reminder_key
+
+    _save(store)
+    return sent
+
+@app.post("/api/subscribe")
+async def subscribe_push(subscription: PushSubscriptionRequest):
+    store = _load()
+    subs = store.get("_push_subscriptions", [])
+    if not any(item.get("endpoint") == subscription.endpoint for item in subs):
+        subs.append(subscription.model_dump())
+    store["_push_subscriptions"] = subs
+    if not _save(store):
+        raise HTTPException(500, "Ошибка сохранения push-подписки")
+    return {"success": True, "message": "Push-подписка сохранена", "public_key": VAPID_PUBLIC_KEY}
+
+@app.post("/api/push/check")
+async def trigger_push_check():
+    sent = send_push_for_due_medicines()
+    return {"success": True, "sent": sent}
+
 
 # ══════════════════════════════════════════════════════
 #  ЗАПУСК
