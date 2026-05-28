@@ -1211,7 +1211,17 @@ async function finishWizard(){
 // ══════════════════════════════════════════════════════
 //  ВЕРСИЯ
 // ══════════════════════════════════════════════════════
+function clearOldCaches(){
+  if ('caches' in window) {
+    caches.keys().then(function(names) {
+      for (let name of names) caches.delete(name);
+    });
+  }
+}
+
 async function syncVersion(){
+  clearOldCaches();
+
   try {
     const r = await fetch(fmtV(`${BASE}/api/version`), {cache:'no-store'});
     if (!r.ok) return;

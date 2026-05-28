@@ -34,6 +34,18 @@ app.add_middleware(
     allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
+
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.update(NO_CACHE_HEADERS)
+    return response
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -581,6 +593,11 @@ async def root():
     p = STATIC_DIR / "index.html"
     return FileResponse(p) if p.exists() else {"status":"ok","error":"index.html not found"}
 
+@app.get("/service-worker.js")
+async def service_worker():
+    p = STATIC_DIR / "service-worker.js"
+    return FileResponse(p) if p.exists() else {"status":"ok","error":"service-worker.js not found"}
+
 
 VAPID_PRIVATE_KEY = "sHaxRrXHj95RPhQh0hXgRasfwgIYaGuybHJAVzdzAgk"
 VAPID_PUBLIC_KEY = "BBqYJditjsv4ZXeaQvjX4irpgLjYdBxovGtAfjKMEfAmlZRy5LdQVPk6i755jyCUjvrB2r0oEX-Mhxx8Mes7NFI"
@@ -708,6 +725,18 @@ app.add_middleware(
     allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
+
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.update(NO_CACHE_HEADERS)
+    return response
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -1205,6 +1234,11 @@ async def test():
 async def root():
     p = STATIC_DIR / "index.html"
     return FileResponse(p) if p.exists() else {"status":"ok","error":"index.html not found"}
+
+@app.get("/service-worker.js")
+async def service_worker():
+    p = STATIC_DIR / "service-worker.js"
+    return FileResponse(p) if p.exists() else {"status":"ok","error":"service-worker.js not found"}
 
 
 VAPID_PRIVATE_KEY = "sHaxRrXHj95RPhQh0hXgRasfwgIYaGuybHJAVzdzAgk"
