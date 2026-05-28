@@ -610,6 +610,21 @@ function checkReminderDueNow(){
   });
 }
 
+function isReminderDueNow(med){
+  if (!med?.is_started || !med?.times) return false;
+  const now = new Date();
+  const hhmm = now.toTimeString().slice(0,5);
+  const wd = (now.getDay() + 6) % 7;
+  const isWeekend = wd >= 5;
+  const check = new Set([
+    ...(med.times.Everyday || []),
+    ...(!isWeekend ? (med.times.Weekdays || []) : []),
+    ...(isWeekend ? (med.times.Weekends || []) : []),
+    ...((med.times[String(wd)]) || [])
+  ]);
+  return check.has(hhmm);
+}
+
 // ══════════════════════════════════════════════════════
 //  РЕНДЕР КАРТОЧЕК (ЭКРАН «АПТЕЧКА»)
 // ══════════════════════════════════════════════════════
@@ -660,10 +675,13 @@ function renderMeds(){
       : 'background:var(--surface-hover);color:var(--text-secondary);';
 
     const sn  = esc(med.name).replace(/'/g, "\\'");
-    const rid = `remind-${chatSafe(med.chat_id)}-${idx}`;
     const hasTimes = Object.values(med.times || {}).some(v => Array.isArray(v) && v.length);
     const scheduleBtnText = hasTimes ? 'Изменить напоминание' : 'Установить напоминание';
     const scheduleBtnBg = hasTimes ? '#7c3aed' : '#94a3b8';
+    const dueNow = isReminderDueNow(med);
+    const rightBtnText = dueNow ? 'Напомнить позже' : scheduleBtnText;
+    const rightBtnBg = dueNow ? '#7c3aed' : scheduleBtnBg;
+    const rightBtnAction = dueNow ? `toggleRemind('auto-remind-${chatSafe(med.chat_id)}-${idx}')` : `openScheduleEditor(${med.chat_id},'${sn}')`;
 
     return `
 <div class="glass rounded-[2.5rem] p-6 relative overflow-hidden med-card" data-idx="${idx}">
@@ -740,11 +758,6 @@ function renderMeds(){
 
   <!-- ── Пополнить + Дозировка ── -->
   <div class="grid grid-cols-2 gap-3 mb-4">
-    <button onclick="openScheduleEditor(${med.chat_id},'${sn}')"
-        class="col-span-2 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-all text-white"
-        style="background:${scheduleBtnBg}">
-      ${scheduleBtnText}
-    </button>
     <button onclick="doRefill(${med.chat_id},'${sn}')"
         class="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-all"
         style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)"
@@ -779,22 +792,12 @@ function renderMeds(){
              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
              Выпил
            </button>
-           <button onclick="toggleRemind('${rid}')"
+           <button onclick="${rightBtnAction}"
                class="flex-1 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
-               style="background:#7c3aed;box-shadow:0 20px 40px -12px rgba(124,58,237,.55)">
+               style="background:${rightBtnBg};box-shadow:0 20px 40px -12px rgba(124,58,237,.55)">
              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-             Напомнить позже
+             ${rightBtnText}
            </button>
-         </div>
-         <div id="${rid}" class="remind-panel">
-           <div class="grid grid-cols-4 gap-2 pt-2">
-             ${[['10 мин',10],['20 мин',20],['30 мин',30],['1 час',60]].map(([l,m]) => `
-             <button onclick="setRemind('${l}','${rid}',${med.chat_id},'${sn}',${m})"
-                 class="py-2.5 rounded-xl text-xs font-bold transition-all"
-                 style="background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)"
-                 onmouseover="this.style.background='rgba(139,92,246,.22)'"
-                 onmouseout="this.style.background='rgba(139,92,246,.1)'">${l}</button>`).join('')}
-           </div>
          </div>
          <div id="auto-remind-${chatSafe(med.chat_id)}-${idx}" class="remind-panel">
            <div class="text-xs font-bold mb-2" style="color:#a78bfa">Напомнить позже</div>
