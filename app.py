@@ -31,6 +31,7 @@ user_states     = {}
 started_users   = set()
 _write_lock     = asyncio.Lock()
 bot_application = None
+_last_data_mtime = None
 
 print(f"🤖 Бот v{BOT_VERSION}  |  данные: {DATA_FILE.absolute()}")
 
@@ -85,7 +86,7 @@ def save_data_store():
     tmp.replace(DATA_FILE)
 
 def load_data_store():
-    global data_store
+    global data_store, _last_data_mtime
     if not DATA_FILE.exists():
         data_store = {}
         return
@@ -97,10 +98,23 @@ def load_data_store():
         data_store.clear()
         for cid, meds in json.loads(raw).items():
             data_store[int(cid)] = {n: _deserialize_med(m) for n, m in meds.items()}
+        _last_data_mtime = DATA_FILE.stat().st_mtime if DATA_FILE.exists() else None
         print(f"✅ Загружено лекарств: {sum(len(v) for v in data_store.values())}")
     except Exception as e:
         print(f"❌ Ошибка загрузки: {e}")
         data_store = {}
+
+def refresh_data_store_if_changed():
+    """Подтягивает изменения из DATA_FILE, если файл изменился во внешнем процессе (web/API)."""
+    global _last_data_mtime
+    if not DATA_FILE.exists():
+        return
+    try:
+        current_mtime = DATA_FILE.stat().st_mtime
+        if _last_data_mtime is None or current_mtime > _last_data_mtime:
+            load_data_store()
+    except Exception as e:
+        print(f"⚠️ Не удалось синхронизировать данные: {e}")
 
 # ══════════════════════════════════════════════════════
 #  РАСЧЁТНЫЕ ФУНКЦИИ
@@ -344,6 +358,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    refresh_data_store_if_changed()
     cid  = update.effective_chat.id
     text = update.message.text.strip()
 
@@ -538,6 +553,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    refresh_data_store_if_changed()
     q    = update.callback_query
     await q.answer()
     cid  = q.message.chat.id
@@ -775,6 +791,7 @@ async def _save_medicine(src, cid: int):
 #  СВОДКА И ПРОГНОЗ
 # ══════════════════════════════════════════════════════
 async def show_summary(update_or_obj, context=None):
+    refresh_data_store_if_changed()
     if hasattr(update_or_obj, "message"):
         msg_obj = update_or_obj.message
         cid     = msg_obj.chat.id
