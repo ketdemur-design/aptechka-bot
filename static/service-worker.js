@@ -37,3 +37,14 @@ self.addEventListener('fetch', (event) => {
     )
   );
 });
+
+
+self.addEventListener('push', function(event) {
+  const data = event.data ? event.data.json() : { title: 'Напоминание', body: 'Время приёма лекарства' };
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/static/icon.png'
+    })
+  );
+});
