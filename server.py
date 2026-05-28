@@ -14,6 +14,7 @@ import uvicorn
 import pytz
 import logging
 from pywebpush import webpush, WebPushException
+from telegram import Bot
 
 from settings import APP_VERSION
 
@@ -727,6 +728,7 @@ logger = logging.getLogger(__name__)
 # ══════════════════════════════════════════════════════
 TZ_MOSCOW  = pytz.timezone('Europe/Moscow')
 DATA_FILE  = Path(os.getenv("DATA_FILE", "meds_data.json"))
+BOT_TOKEN  = os.getenv("BOT_TOKEN")
 STATIC_DIR = Path(__file__).parent / "static"
 
 logger.info(f"📁 server.py  данные: {DATA_FILE.absolute()}")
@@ -1033,6 +1035,19 @@ def build_med_row(name: str, med: dict, chat_id: int) -> dict:
         "times":            med.get("times", {}),
     }
 
+
+async def notify_bot_medicine_added(chat_id: int, med_name: str) -> None:
+    if not BOT_TOKEN or not chat_id:
+        return
+    try:
+        async with Bot(BOT_TOKEN) as bot:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ Лекарство «{med_name}» добавлено через приложение.",
+            )
+    except Exception as e:
+        logger.warning(f"bot notify error: {e}")
+
 # ══════════════════════════════════════════════════════
 #  API ЭНДПОИНТЫ
 # ══════════════════════════════════════════════════════
@@ -1083,6 +1098,8 @@ async def add_medicine(req: AddMedicineRequest):
 
         if not _save(store):
             raise HTTPException(500, "Ошибка сохранения")
+
+        await notify_bot_medicine_added(chat_id, req_name)
 
         med  = store[chat_id][req_name]
         un   = get_unit_name(req.form)
