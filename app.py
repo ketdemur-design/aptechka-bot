@@ -858,6 +858,7 @@ async def show_summary(update_or_obj, context=None):
 async def _reminder_loop():
     while True:
         try:
+            refresh_data_store_if_changed()
             now   = get_now()
             ts    = now.strftime("%H:%M")
             wd    = str(now.weekday())

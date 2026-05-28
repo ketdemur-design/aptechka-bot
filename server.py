@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -632,14 +633,25 @@ def send_push_for_due_medicines() -> int:
         if isinstance(chat_id, str):
             continue
         for med_name, med in meds.items():
+            if not med.get("is_started"):
+                continue
+
+            snooze_until = _parse_dt(med.get("snooze_until"))
+            if snooze_until and snooze_until > now:
+                continue
+
             times = med.get("times", {})
             today_times = []
             if isinstance(times.get("Everyday"), list):
                 today_times.extend(times.get("Everyday", []))
+            if now.weekday() >= 5 and isinstance(times.get("Weekends"), list):
+                today_times.extend(times.get("Weekends", []))
+            if now.weekday() < 5 and isinstance(times.get("Weekdays"), list):
+                today_times.extend(times.get("Weekdays", []))
             if isinstance(times.get(weekday), list):
                 today_times.extend(times.get(weekday, []))
 
-            if now_hhmm not in today_times:
+            if now_hhmm not in set(today_times):
                 continue
 
             reminder_key = f"{day_key}:{now_hhmm}"
@@ -765,6 +777,17 @@ class StartCourseRequest(BaseModel):
 class TakenRequest(BaseModel):
     chat_id:  int
     med_name: str
+
+class ScheduleRequest(BaseModel):
+    chat_id: int
+    med_name: str
+    day_key: str
+    times: list[str]
+
+class SnoozeRequest(BaseModel):
+    chat_id: int
+    med_name: str
+    minutes: int
 
 class PushSubscriptionRequest(BaseModel):
     endpoint: str
@@ -1201,6 +1224,47 @@ async def mark_taken(req: TakenRequest):
         return {"success": True, "message": "✅ Приём отмечен!", "updated": {}}
 
 
+@app.post("/api/meds/schedule")
+async def set_schedule(req: ScheduleRequest):
+    store = _load()
+    if req.chat_id not in store or req.med_name not in store[req.chat_id]:
+        raise HTTPException(404, "Лекарство не найдено")
+
+    times = [
+        t.strip()
+        for t in req.times
+        if isinstance(t, str) and re.match(r"^(?:[01]\d|2[0-3]):[0-5]\d$", t.strip())
+    ]
+    if not times:
+        raise HTTPException(400, "Нужно передать хотя бы одно корректное время в формате HH:MM")
+
+    med = store[req.chat_id][req.med_name]
+    if not isinstance(med.get("times"), dict):
+        med["times"] = {}
+    med["times"][req.day_key] = sorted(set(times))
+    med["last_reminder_key"] = None
+    med["last_push_key"] = None
+
+    if not _save(store):
+        raise HTTPException(500, "Ошибка сохранения")
+    return {"success": True, "message": "Расписание сохранено", "times": med["times"]}
+
+
+@app.post("/api/meds/snooze")
+async def snooze_schedule(req: SnoozeRequest):
+    store = _load()
+    if req.chat_id not in store or req.med_name not in store[req.chat_id]:
+        raise HTTPException(404, "Лекарство не найдено")
+    if req.minutes <= 0:
+        raise HTTPException(400, "minutes должен быть больше 0")
+
+    med = store[req.chat_id][req.med_name]
+    med["snooze_until"] = (get_now() + timedelta(minutes=req.minutes)).strftime("%Y-%m-%d %H:%M")
+    if not _save(store):
+        raise HTTPException(500, "Ошибка сохранения")
+    return {"success": True, "message": f"Напоминание отложено на {req.minutes} мин"}
+
+
 @app.delete("/api/meds")
 async def delete_medicine(chat_id: int, med_name: str):
     logger.info(f"DELETE /api/meds  {med_name}")
@@ -1274,14 +1338,25 @@ def send_push_for_due_medicines() -> int:
         if isinstance(chat_id, str):
             continue
         for med_name, med in meds.items():
+            if not med.get("is_started"):
+                continue
+
+            snooze_until = _parse_dt(med.get("snooze_until"))
+            if snooze_until and snooze_until > now:
+                continue
+
             times = med.get("times", {})
             today_times = []
             if isinstance(times.get("Everyday"), list):
                 today_times.extend(times.get("Everyday", []))
+            if now.weekday() >= 5 and isinstance(times.get("Weekends"), list):
+                today_times.extend(times.get("Weekends", []))
+            if now.weekday() < 5 and isinstance(times.get("Weekdays"), list):
+                today_times.extend(times.get("Weekdays", []))
             if isinstance(times.get(weekday), list):
                 today_times.extend(times.get(weekday, []))
 
-            if now_hhmm not in today_times:
+            if now_hhmm not in set(today_times):
                 continue
 
             reminder_key = f"{day_key}:{now_hhmm}"
@@ -1298,6 +1373,22 @@ def send_push_for_due_medicines() -> int:
 
     _save(store)
     return sent
+
+async def _push_reminder_loop():
+    while True:
+        try:
+            sent = send_push_for_due_medicines()
+            if sent:
+                logger.info(f"sent {sent} web push reminder(s)")
+        except Exception as e:
+            logger.error(f"push reminder loop error: {e}")
+        await asyncio.sleep(30)
+
+
+@app.on_event("startup")
+async def start_push_reminder_loop():
+    asyncio.create_task(_push_reminder_loop())
+
 
 @app.post("/api/subscribe")
 async def subscribe_push(subscription: PushSubscriptionRequest):
