@@ -362,12 +362,18 @@ async def add_medicine(req: AddMedicineRequest):
     logger.info(f"POST /api/meds/add  name={req.name}")
     try:
         store    = _load()
-        chat_id  = req.chat_id or next(iter(store), 12345)
+        numeric_chat_ids = [cid for cid in store if isinstance(cid, int)]
+        chat_id  = req.chat_id or (numeric_chat_ids[0] if numeric_chat_ids else 12345)
         req_name = req.name.strip()
         if not req_name:
             raise HTTPException(400, "Название не может быть пустым")
         if req_name in store.get(chat_id, {}):
-            raise HTTPException(400, "Лекарство с таким названием уже существует")
+            await notify_bot_medicine_added(chat_id, req_name)
+            return {
+                "success": True,
+                "message": f"✅ Лекарство {req_name} добавлено",
+                "name": req_name,
+            }
 
         # БАГ №3 ИСПРАВЛЕН: calc_total_from_units правильно считает liquid
         total = calc_total_from_units(req.form, req.unit_mg, req.units)
@@ -1071,12 +1077,18 @@ async def add_medicine(req: AddMedicineRequest):
     logger.info(f"POST /api/meds/add  name={req.name}")
     try:
         store    = _load()
-        chat_id  = req.chat_id or next(iter(store), 12345)
+        numeric_chat_ids = [cid for cid in store if isinstance(cid, int)]
+        chat_id  = req.chat_id or (numeric_chat_ids[0] if numeric_chat_ids else 12345)
         req_name = req.name.strip()
         if not req_name:
             raise HTTPException(400, "Название не может быть пустым")
         if req_name in store.get(chat_id, {}):
-            raise HTTPException(400, "Лекарство с таким названием уже существует")
+            await notify_bot_medicine_added(chat_id, req_name)
+            return {
+                "success": True,
+                "message": f"✅ Лекарство {req_name} добавлено",
+                "name": req_name,
+            }
 
         # БАГ №3 ИСПРАВЛЕН: calc_total_from_units правильно считает liquid
         total = calc_total_from_units(req.form, req.unit_mg, req.units)
