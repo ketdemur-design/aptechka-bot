@@ -262,6 +262,16 @@ def is_stock_empty(med: dict) -> bool:
         return False
     return total < unit_mg
 
+def is_snoozed_now(med: dict) -> bool:
+    sval = med.get("snooze_until")
+    if not sval:
+        return False
+    try:
+        dt = TZ_MOSCOW.localize(datetime.strptime(sval, "%Y-%m-%d %H:%M"))
+        return get_now() < dt
+    except Exception:
+        return False
+
 def format_schedule(times: dict) -> str:
     if not isinstance(times, dict) or not times:
         return "не установлено"
@@ -685,6 +695,9 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         await q.edit_message_text(f"⏳ Напомню про «{med_name}» через {minutes} мин.")
+        if cid in data_store and med_name in data_store[cid]:
+            data_store[cid][med_name]["snooze_until"] = (get_now() + timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M")
+            await save_data_store_async()
         return
 
     if ":" in data:
@@ -853,6 +866,8 @@ async def _reminder_loop():
             for cid, meds in list(data_store.items()):
                 for name, m in list(meds.items()):
                     if not m.get("is_started"):
+                        continue
+                    if is_snoozed_now(m):
                         continue
                     t = m.get("times", {})
                     check = []

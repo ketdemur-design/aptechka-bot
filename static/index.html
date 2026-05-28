@@ -268,6 +268,8 @@ let medsData = [];
 let wStep = 0, wData = {};
 const BASE = ''; // относительные пути — работает на любом хосте
 let APP_VER = '—';
+let scheduleEditorTarget = null;
+const snoozeShownKeys = new Set();
 const fmtV = u => u + (u.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(APP_VER);
 
 const FORM_LABELS = {
@@ -547,7 +549,66 @@ function showSkeleton(){
 
 // ── напоминания-dropdown ──
 function toggleRemind(id){ document.getElementById(id)?.classList.toggle('open'); }
-function setRemind(label, id){ toast(`⏰ Напоминание через ${label}`); document.getElementById(id)?.classList.remove('open'); }
+async function setRemind(label, id, chatId, medName, minutes){
+  try {
+    const r = await fetch(`${BASE}/api/meds/snooze`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({chat_id: chatId, med_name: medName, minutes})
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    toast(`⏰ Напомню через ${label}`);
+    document.getElementById(id)?.classList.remove('open');
+  } catch {
+    toast('❌ Не удалось отложить напоминание', true);
+  }
+}
+
+function openScheduleEditor(chatId, medName){
+  scheduleEditorTarget = {chatId, medName};
+  const modal = document.getElementById('addModal');
+  const c = document.getElementById('wizardContent');
+  c.innerHTML = `
+    <h3 class="text-xl font-bold mb-4" style="color:var(--text-primary)">Расписание: ${esc(medName)}</h3>
+    <select id="schedDay" class="w-full p-3 rounded-xl mb-3" style="background:var(--surface-hover);color:var(--text-primary)">
+      <option value="Everyday">Каждый день</option><option value="Weekdays">Будни</option><option value="Weekends">Выходные</option>
+      <option value="0">Пн</option><option value="1">Вт</option><option value="2">Ср</option><option value="3">Чт</option><option value="4">Пт</option><option value="5">Сб</option><option value="6">Вс</option>
+    </select>
+    <input id="schedTimes" class="w-full p-3 rounded-xl mb-4" style="background:var(--surface-hover);color:var(--text-primary)" placeholder="08:00, 20:00">
+    <div class="flex gap-3">
+      <button id="schedSave" class="flex-1 bg-violet-600 text-white py-3 rounded-xl font-bold">Сохранить</button>
+      <button id="schedCancel" class="flex-1 bg-slate-500 text-white py-3 rounded-xl font-bold">Отмена</button>
+    </div>`;
+  document.getElementById('schedSave').onclick = saveSchedule;
+  document.getElementById('schedCancel').onclick = closeWizard;
+  modal.classList.add('active');
+}
+
+async function saveSchedule(){
+  const dayKey = document.getElementById('schedDay').value;
+  const rawTimes = document.getElementById('schedTimes').value;
+  const times = rawTimes.split(',').map(v => v.trim()).filter(Boolean);
+  if (!scheduleEditorTarget || !times.length){ toast('❌ Укажите время', true); return; }
+  const payload = {chat_id: scheduleEditorTarget.chatId, med_name: scheduleEditorTarget.medName, day_key: dayKey, times};
+  const r = await fetch(`${BASE}/api/meds/schedule`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  if (!r.ok){ toast('❌ Ошибка сохранения расписания', true); return; }
+  closeWizard(); toast('✅ Расписание сохранено'); await fetchMeds();
+}
+
+function checkReminderDueNow(){
+  const now = new Date();
+  const hhmm = now.toTimeString().slice(0,5);
+  const wd = (now.getDay() + 6) % 7;
+  const isWeekend = wd >= 5;
+  medsData.forEach((med, idx) => {
+    if (!med.is_started || !med.times) return;
+    const check = new Set([...(med.times.Everyday || []), ...(!isWeekend ? (med.times.Weekdays || []) : []), ...(isWeekend ? (med.times.Weekends || []) : []), ...((med.times[String(wd)]) || [])]);
+    const key = `${med.chat_id}:${med.name}:${hhmm}`;
+    if (check.has(hhmm) && !snoozeShownKeys.has(key)){
+      snoozeShownKeys.add(key);
+      document.getElementById(`auto-remind-${chatSafe(med.chat_id)}-${idx}`)?.classList.add('open');
+    }
+  });
+}
 
 // ══════════════════════════════════════════════════════
 //  РЕНДЕР КАРТОЧЕК (ЭКРАН «АПТЕЧКА»)
@@ -600,6 +661,9 @@ function renderMeds(){
 
     const sn  = esc(med.name).replace(/'/g, "\\'");
     const rid = `remind-${chatSafe(med.chat_id)}-${idx}`;
+    const hasTimes = Object.values(med.times || {}).some(v => Array.isArray(v) && v.length);
+    const scheduleBtnText = hasTimes ? 'Изменить напоминание' : 'Установить напоминание';
+    const scheduleBtnBg = hasTimes ? '#7c3aed' : '#94a3b8';
 
     return `
 <div class="glass rounded-[2.5rem] p-6 relative overflow-hidden med-card" data-idx="${idx}">
@@ -676,6 +740,11 @@ function renderMeds(){
 
   <!-- ── Пополнить + Дозировка ── -->
   <div class="grid grid-cols-2 gap-3 mb-4">
+    <button onclick="openScheduleEditor(${med.chat_id},'${sn}')"
+        class="col-span-2 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-all text-white"
+        style="background:${scheduleBtnBg}">
+      ${scheduleBtnText}
+    </button>
     <button onclick="doRefill(${med.chat_id},'${sn}')"
         class="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-all"
         style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)"
@@ -719,12 +788,18 @@ function renderMeds(){
          </div>
          <div id="${rid}" class="remind-panel">
            <div class="grid grid-cols-4 gap-2 pt-2">
-             ${['10 мин','20 мин','30 мин','1 час'].map(l => `
-             <button onclick="setRemind('${l}','${rid}')"
+             ${[['10 мин',10],['20 мин',20],['30 мин',30],['1 час',60]].map(([l,m]) => `
+             <button onclick="setRemind('${l}','${rid}',${med.chat_id},'${sn}',${m})"
                  class="py-2.5 rounded-xl text-xs font-bold transition-all"
                  style="background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)"
                  onmouseover="this.style.background='rgba(139,92,246,.22)'"
                  onmouseout="this.style.background='rgba(139,92,246,.1)'">${l}</button>`).join('')}
+           </div>
+         </div>
+         <div id="auto-remind-${chatSafe(med.chat_id)}-${idx}" class="remind-panel">
+           <div class="text-xs font-bold mb-2" style="color:#a78bfa">Напомнить позже</div>
+           <div class="grid grid-cols-4 gap-2 pt-1">
+             ${[['10 мин',10],['20 мин',20],['30 мин',30],['1 час',60]].map(([l,m]) => `<button onclick="setRemind('${l}','auto-remind-${chatSafe(med.chat_id)}-${idx}',${med.chat_id},'${sn}',${m})" class="py-2.5 rounded-xl text-xs font-bold" style="background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)">${l}</button>`).join('')}
            </div>
          </div>
        </div>`
@@ -1116,7 +1191,9 @@ async function finishWizard(){
       try { const d = JSON.parse(responseText); msg = d.message || msg; } catch {}
       toast(msg);
       closeWizard();
-      await fetchMeds();
+  await fetchMeds();
+  checkReminderDueNow();
+  setInterval(checkReminderDueNow, 60 * 1000);
     } else {
       let detail = `Ошибка сервера (${r.status})`;
       try { const e = JSON.parse(responseText); detail = e.detail || detail; } catch {}
