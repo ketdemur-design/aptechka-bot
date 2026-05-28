@@ -104,10 +104,12 @@ def load_data_store():
             _last_data_mtime = DATA_FILE.stat().st_mtime if DATA_FILE.exists() else None
             return
 
-        loaded = {
-            int(cid): {n: _deserialize_med(m) for n, m in meds.items()}
-            for cid, meds in json.loads(raw).items()
-        }
+        loaded = {}
+        for cid, meds in json.loads(raw).items():
+            try:
+                loaded[int(cid)] = {n: _deserialize_med(m) for n, m in meds.items()}
+            except (TypeError, ValueError):
+                continue
         data_store.clear()
         data_store.update(loaded)
         _last_data_mtime = DATA_FILE.stat().st_mtime if DATA_FILE.exists() else None
