@@ -381,7 +381,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    refresh_data_store_if_changed()
+    load_data_store()
     cid  = update.effective_chat.id
     text = update.message.text.strip()
 
@@ -578,7 +578,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    refresh_data_store_if_changed()
+    load_data_store()
     q    = update.callback_query
     await q.answer()
     cid  = q.message.chat.id
