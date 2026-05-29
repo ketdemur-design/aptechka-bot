@@ -370,6 +370,13 @@ def reminder_action_menu(med_name: str):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cid = update.effective_chat.id
     started_users.add(cid)
+
+    # Регистрируем чат на диске, чтобы сайт при первой загрузке
+    # мог сохранить лекарства под реальным Telegram chat_id.
+    if cid not in data_store:
+        data_store[cid] = {}
+        await save_data_store_async()
+
     await update.message.reply_text(
         f"Привет 👋  (v{BOT_VERSION})\n\n"
         "Я работаю по МСК.\n"
