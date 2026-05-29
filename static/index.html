@@ -99,7 +99,11 @@ body{
 @keyframes slideUp{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
 .toast{animation:slideUp .3s ease-out}
 
-button{cursor:pointer}
+button{cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+svg{width:20px;height:20px;display:block;flex-shrink:0}
+.med-card{min-height:28rem;display:flex;flex-direction:column}
+.med-card-body{display:flex;flex:1;flex-direction:column}
+.med-card-main{flex:1}
 .med-card:hover .med-title{color:#8b5cf6;transition:color .2s}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spinning{animation:spin .7s linear infinite}
@@ -186,7 +190,7 @@ async function initPushNotifications() {
 }
 </script>
 </head>
-<body class="pb-24 px-4 pt-8 max-w-lg mx-auto min-h-screen">
+<body class="pb-[calc(7rem+env(safe-area-inset-bottom))] px-4 pt-8 max-w-lg mx-auto min-h-screen">
 
 <!-- ══ ШАПКА ══ -->
 <header class="flex items-center justify-between mb-10">
@@ -202,13 +206,13 @@ async function initPushNotifications() {
     <p class="text-sm font-medium mt-1" style="color:var(--text-secondary)">Будьте здоровы и не пропускайте приём</p>
   </div>
   <div class="flex items-center gap-2">
-    <button id="themeToggle" class="p-2.5 glass rounded-2xl hover:opacity-80 transition-opacity" style="color:var(--text-primary)">
+    <button id="themeToggle" class="p-2.5 glass rounded-2xl hover:opacity-80 transition-opacity leading-none" style="color:var(--text-primary)">
       <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="5"/>
         <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
       </svg>
     </button>
-    <button id="refreshBtn" class="p-2.5 glass rounded-2xl hover:opacity-80 transition-opacity" style="color:var(--text-primary)">
+    <button id="refreshBtn" class="p-2.5 glass rounded-2xl hover:opacity-80 transition-opacity leading-none" style="color:var(--text-primary)">
       <svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
         <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
@@ -221,7 +225,7 @@ async function initPushNotifications() {
 <div class="grid grid-cols-2 gap-4 mb-8">
   <div class="glass p-5 rounded-[2rem] card-shadow">
     <div class="flex items-center gap-3 mb-2">
-      <div class="p-2 rounded-xl" style="background:rgba(52,211,153,.1);color:#34d399">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(52,211,153,.1);color:#34d399">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       </div>
       <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-secondary)">Активные</span>
@@ -230,7 +234,7 @@ async function initPushNotifications() {
   </div>
   <div class="glass p-5 rounded-[2rem] card-shadow">
     <div class="flex items-center gap-3 mb-2">
-      <div class="p-2 rounded-xl" style="background:rgba(251,191,36,.1);color:#fbbf24">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(251,191,36,.1);color:#fbbf24">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
       </div>
       <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-secondary)">Заканчиваются</span>
@@ -244,7 +248,7 @@ async function initPushNotifications() {
   <div class="flex items-center justify-between mb-6">
     <h2 class="text-xs font-bold uppercase tracking-[.2em] pl-2" style="color:var(--text-secondary)">Текущий график</h2>
     <button id="addMedBtn"
-        class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold text-white active:scale-95 transition-all"
+        class="flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold leading-none text-white active:scale-95 transition-all"
         style="background:#7c3aed;box-shadow:0 4px 14px rgba(124,58,237,.4)">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
       Добавить
@@ -271,18 +275,18 @@ async function initPushNotifications() {
 </div>
 
 <!-- ══ НИЖНЯЯ ПАНЕЛЬ ══ -->
-<div class="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4 z-40">
+<div class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[calc(512px-32px)] px-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] z-40">
   <div class="glass h-16 rounded-full flex items-center justify-around px-10 shadow-2xl"
        style="border-top:1px solid rgba(255,255,255,.1)">
 
-    <button id="btnMain" class="has-tip transition-colors" style="color:#a78bfa">
+    <button id="btnMain" class="has-tip transition-colors w-12 h-12 flex items-center justify-center leading-none" style="color:#a78bfa">
       <span class="tip">Аптечка</span>
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
       </svg>
     </button>
 
-    <button id="btnForecast" class="has-tip transition-colors" style="color:var(--text-secondary)">
+    <button id="btnForecast" class="has-tip transition-colors w-12 h-12 flex items-center justify-center leading-none" style="color:var(--text-secondary)">
       <span class="tip">Прогноз</span>
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
@@ -290,7 +294,7 @@ async function initPushNotifications() {
       </svg>
     </button>
 
-    <button id="btnReminders" class="has-tip transition-colors" style="color:var(--text-secondary)">
+    <button id="btnReminders" class="has-tip transition-colors w-12 h-12 flex items-center justify-center leading-none" style="color:var(--text-secondary)">
       <span class="tip">Напоминания</span>
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -724,26 +728,27 @@ function renderMeds(){
 
     return `
 <div class="glass rounded-[2.5rem] p-6 relative overflow-hidden med-card" data-idx="${idx}">
+  <div class="med-card-body">
 
   <!-- ── шапка карточки ── -->
   <div class="flex items-start justify-between mb-4">
-    <div class="flex items-center gap-4">
+    <div class="flex min-w-0 flex-1 items-center gap-4">
       <div class="w-14 h-14 rounded-[1.5rem] flex items-center justify-center relative shadow-lg ${medCls(med.form)}" style="flex-shrink:0">
         <div class="absolute inset-0 rounded-[1.5rem] pointer-events-none" style="background:linear-gradient(135deg,rgba(255,255,255,.4) 0%,rgba(0,0,0,.1) 100%)"></div>
         <span class="relative z-10 text-2xl">${medIcon(med.form)}</span>
       </div>
-      <div>
-        <h3 class="med-title font-bold text-lg uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</h3>
-        <div class="flex items-center gap-2 mt-0.5">
-          <p class="text-sm font-medium" style="color:var(--text-secondary)">${fmtN(med.daily_mg)} мг/сут</p>
+      <div class="min-w-0 flex-1">
+        <h3 class="med-title truncate font-bold text-lg uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</h3>
+        <div class="flex min-w-0 items-center gap-2 mt-0.5">
+          <p class="shrink-0 text-sm font-medium" style="color:var(--text-secondary)">${fmtN(med.daily_mg)} мг/сут</p>
           <div class="w-1 h-1 rounded-full" style="background:rgba(148,163,184,.35)"></div>
-          <p class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--text-secondary)">${cd === 0 ? 'Пожизненно ♾' : `Курс: ${cd} дн.`}</p>
+          <p class="truncate text-[11px] font-bold uppercase tracking-wider" style="color:var(--text-secondary)">${cd === 0 ? 'Пожизненно ♾' : `Курс: ${cd} дн.`}</p>
         </div>
       </div>
     </div>
-    <div class="flex flex-col items-end gap-2">
+    <div class="shrink-0 flex flex-col items-end gap-2">
       <button onclick="doDelete(${med.chat_id},'${sn}')"
-          class="p-2 rounded-xl transition-all" style="color:rgba(244,63,94,.55)"
+          class="p-2 rounded-xl transition-all leading-none" style="color:rgba(244,63,94,.55)"
           onmouseover="this.style.color='#f43f5e';this.style.background='rgba(244,63,94,.1)'"
           onmouseout="this.style.color='rgba(244,63,94,.55)';this.style.background=''">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 4V3c0-1 1-2 2-2h4c1 0 2 1 2 2v1"/></svg>
@@ -754,6 +759,7 @@ function renderMeds(){
     </div>
   </div>
 
+  <div class="med-card-main">
   <!-- ── прогресс-шкала ── -->
   <div class="mb-6">
     <div class="flex justify-between text-[11px] font-extrabold uppercase tracking-widest mb-3" style="color:var(--text-secondary)">
@@ -786,19 +792,21 @@ function renderMeds(){
   </div>
 
   <!-- ── расписание + остаток ── -->
-  <div class="flex items-center justify-between mb-6">
-    <div class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-2xl" style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)">
+  <div class="flex items-center justify-between gap-3 mb-6">
+    <div class="min-w-0 flex flex-1 items-center gap-2 text-xs font-bold px-4 py-2 rounded-2xl" style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)">
       <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      ${med.schedule && med.schedule !== 'не указано' ? '<span style="color:#a78bfa">🔔 ' + esc(med.schedule) + '</span>' : '<span style="opacity:.6">⏰ Напоминание не установлено</span>'}
+      ${med.schedule && med.schedule !== 'не указано' ? '<span class="truncate" style="color:#a78bfa">🔔 ' + esc(med.schedule) + '</span>' : '<span class="truncate" style="opacity:.6">⏰ Напоминание не установлено</span>'}
     </div>
-    <div class="stock-badge text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl ${stockCrit ? 'pulse-badge' : ''}"
+    <div class="stock-badge shrink-0 text-[11px] font-extrabold uppercase tracking-tight px-3 py-1.5 rounded-xl ${stockCrit ? 'pulse-badge' : ''}"
          style="${stockStyle}">Запас: ${remU} ${un}</div>
+  </div>
+
   </div>
 
   <!-- ── Пополнить + Дозировка ── -->
   <div class="grid grid-cols-2 gap-3 mb-4">
     <button onclick="doRefill(${med.chat_id},'${sn}')"
-        class="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-all"
+        class="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold leading-none transition-all"
         style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)"
         onmouseover="this.style.color='#10b981';this.style.borderColor='rgba(16,185,129,.25)'"
         onmouseout="this.style.color='var(--text-secondary)';this.style.borderColor='rgba(255,255,255,.1)'">
@@ -806,7 +814,7 @@ function renderMeds(){
       Пополнить
     </button>
     <button onclick="doDose(${med.chat_id},'${sn}')"
-        class="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-all"
+        class="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold leading-none transition-all"
         style="background:var(--btn-secondary);color:var(--text-secondary);border:1px solid rgba(255,255,255,.1)"
         onmouseover="this.style.color='#8b5cf6';this.style.borderColor='rgba(139,92,246,.25)'"
         onmouseout="this.style.color='var(--text-secondary)';this.style.borderColor='rgba(255,255,255,.1)'">
@@ -818,7 +826,7 @@ function renderMeds(){
   <!-- ── главная CTA ── -->
   ${!started
     ? `<button onclick="doStart(${med.chat_id},'${sn}')"
-           class="w-full text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+           class="w-full text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 whitespace-nowrap hover:brightness-110 active:scale-95 leading-none transition-all"
            style="background:#10b981;box-shadow:0 10px 25px -5px rgba(16,185,129,.35)">
          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
          Начать курс
@@ -826,13 +834,13 @@ function renderMeds(){
     : `<div class="space-y-3">
          <div class="flex gap-2">
            <button onclick="doTake(${med.chat_id},'${sn}',this.closest('.med-card'))" ${med.stock_empty ? 'disabled' : ''}
-               class="flex-1 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all disabled:opacity-40"
+               class="flex-1 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 whitespace-nowrap text-xs sm:text-sm hover:brightness-110 active:scale-95 leading-none transition-all disabled:opacity-40"
                style="background:#7c3aed;box-shadow:0 20px 40px -12px rgba(124,58,237,.55);">
              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
              Выпил
            </button>
            <button onclick="${rightBtnAction}"
-               class="flex-1 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+               class="flex-1 text-white font-extrabold py-4 rounded-3xl flex items-center justify-center gap-2 whitespace-nowrap text-xs sm:text-sm hover:brightness-110 active:scale-95 leading-none transition-all"
                style="background:${rightBtnBg};box-shadow:0 20px 40px -12px rgba(124,58,237,.55)">
              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
              ${rightBtnText}
@@ -841,11 +849,12 @@ function renderMeds(){
          <div id="auto-remind-${chatSafe(med.chat_id)}-${idx}" class="remind-panel">
            <div class="text-xs font-bold mb-2" style="color:#a78bfa">Напомнить позже</div>
            <div class="grid grid-cols-4 gap-2 pt-1">
-             ${[['10 мин',10],['20 мин',20],['30 мин',30],['1 час',60]].map(([l,m]) => `<button onclick="setRemind('${l}','auto-remind-${chatSafe(med.chat_id)}-${idx}',${med.chat_id},'${sn}',${m})" class="py-2.5 rounded-xl text-xs font-bold" style="background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)">${l}</button>`).join('')}
+             ${[['10 мин',10],['20 мин',20],['30 мин',30],['1 час',60]].map(([l,m]) => `<button onclick="setRemind('${l}','auto-remind-${chatSafe(med.chat_id)}-${idx}',${med.chat_id},'${sn}',${m})" class="py-2.5 rounded-xl text-xs font-bold leading-none" style="background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)">${l}</button>`).join('')}
            </div>
          </div>
        </div>`
   }
+  </div>
 </div>`;
   }).join('');
 
@@ -907,8 +916,8 @@ function renderForecast(){
 <div class="glass rounded-[2rem] p-5 card-shadow">
   <div class="flex items-center gap-4 mb-4">
     <div class="w-12 h-12 rounded-[1.2rem] flex items-center justify-center text-2xl ${medCls(med.form)}">${medIcon(med.form)}</div>
-    <div class="flex-1">
-      <div class="font-bold text-base uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</div>
+    <div class="min-w-0 flex-1">
+      <div class="truncate font-bold text-base uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</div>
       <div class="text-xs font-medium mt-0.5" style="color:var(--text-secondary)">${status}</div>
     </div>
     <div class="px-3 py-1 rounded-full text-xs font-bold ${dl <= 7 ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}">${dl} дн.</div>
@@ -988,7 +997,7 @@ function renderReminders(){
               </div>
             </div>`).join('')
       : '<div class="flex items-start gap-3 py-3 px-3 rounded-xl" style="background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.15)">' +
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" class="mt-0.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
         '<p class="text-xs font-medium" style="color:#a78bfa">Напоминание не установлено.<br>Настройте время в Telegram боте:<br><b>⏰ Напоминание (Дни/Время)</b></p>' +
         '</div>';
 
@@ -996,15 +1005,15 @@ function renderReminders(){
 <div class="glass rounded-[2rem] p-5 card-shadow">
   <div class="flex items-center gap-4 mb-3">
     <div class="w-12 h-12 rounded-[1.2rem] flex items-center justify-center text-2xl ${medCls(med.form)}">${medIcon(med.form)}</div>
-    <div class="flex-1">
-      <div class="font-bold uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</div>
+    <div class="min-w-0 flex-1">
+      <div class="truncate font-bold uppercase tracking-tight" style="color:var(--text-primary)">${esc(med.name)}</div>
       <div class="text-xs font-medium mt-0.5" style="color:var(--text-secondary)">${dlyU} ${un}/сут · ${med.is_started ? '▶️ приём идёт' : '⏸ не начат'}</div>
     </div>
   </div>
   <div class="mb-3">${timesHtml}</div>
   ${med.is_started ? `
   <button onclick="doTake(${med.chat_id},'${sn}',null)"
-      class="w-full text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all text-sm"
+      class="w-full text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 leading-none transition-all text-sm"
       style="background:#7c3aed;box-shadow:0 10px 25px -5px rgba(124,58,237,.3)">
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
     Выпил
