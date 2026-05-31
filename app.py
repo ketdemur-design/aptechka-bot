@@ -65,24 +65,46 @@ def _deserialize_med(med: dict) -> dict:
     return p
 
 async def save_data_store_async():
-    """Асинхронное сохранение с _write_lock — БАГ №1 ИСПРАВЛЕН."""
-    ser = {
-        str(cid): {n: _serialize_med(m) for n, m in meds.items()}
-        for cid, meds in data_store.items()
-    }
+    """Асинхронное сохранение с объединением данных диска."""
     async with _write_lock:
+        disk_data = {}
+        if DATA_FILE.exists():
+            try:
+                raw = DATA_FILE.read_text(encoding="utf-8").strip()
+                if raw:
+                    disk_data = json.loads(raw)
+            except Exception as e:
+                print(f"Error reading before save: {e}")
+
+        for cid, meds in data_store.items():
+            str_cid = str(cid)
+            disk_data.setdefault(str_cid, {})
+            for name, med in meds.items():
+                disk_data[str_cid][name] = _serialize_med(med)
+
         tmp = DATA_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(ser, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.write_text(json.dumps(disk_data, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(DATA_FILE)
 
 def save_data_store():
-    """Синхронное сохранение (используется в синхронных контекстах)."""
-    ser = {
-        str(cid): {n: _serialize_med(m) for n, m in meds.items()}
-        for cid, meds in data_store.items()
-    }
+    """Синхронное сохранение с объединением данных диска."""
+    disk_data = {}
+    if DATA_FILE.exists():
+        try:
+            raw = DATA_FILE.read_text(encoding="utf-8").strip()
+            if raw:
+                disk_data = json.loads(raw)
+        except Exception as e:
+            print(f"Error reading before save: {e}")
+
+    for cid, meds in data_store.items():
+        str_cid = str(cid)
+        disk_data.setdefault(str_cid, {})
+        for name, med in meds.items():
+            disk_data[str_cid][name] = _serialize_med(med)
+
     tmp = DATA_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(ser, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.write_text(json.dumps(disk_data, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(DATA_FILE)
 
 def load_data_store():
