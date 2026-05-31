@@ -377,7 +377,7 @@ async def add_medicine(req: AddMedicineRequest):
     logger.info(f"POST /api/meds/add  name={req.name}")
     try:
         store    = _load()
-        chat_id  = req.chat_id or next(iter(store), 12345)
+        chat_id  = req.chat_id or next((k for k in store if isinstance(k, int)), 12345)
         req_name = req.name.strip()
         if not req_name:
             raise HTTPException(400, "Название не может быть пустым")
@@ -1086,7 +1086,7 @@ async def add_medicine(req: AddMedicineRequest):
     logger.info(f"POST /api/meds/add  name={req.name}")
     try:
         store    = _load()
-        chat_id  = req.chat_id or next(iter(store), 12345)
+        chat_id  = req.chat_id or next((k for k in store if isinstance(k, int)), 12345)
         req_name = req.name.strip()
         if not req_name:
             raise HTTPException(400, "Название не может быть пустым")
